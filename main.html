@@ -269,18 +269,44 @@
             
             // --- 6. 更新 3D 模型 (应用 "统一" 参数) ---
             const positions = torsoGeo.attributes.position.array;
+            const cornerRadius = x * 0.15; // 圆角半径，设置为一个较小的值
+            const halfWidth = width / 2;
+            const halfDepth = x / 2;
+
             for (let i = 0; i < positions.length; i += 3) {
                 const base_ox = originalPositions[i];
                 const base_oy = originalPositions[i + 1];
                 const base_oz = originalPositions[i + 2];
 
-                const ox = base_ox * width;
+                let ox = base_ox * width;
                 const oy = base_oy * TORSO_HEIGHT;
-                const oz = base_oz * x;
-                let zOffset = 0;
+                let oz = base_oz * x;
                 
+                const original_ox_for_bust = ox; // 为计算胸部形状，保留原始ox
+
+                // --- 圆角逻辑开始 ---
+                // 只处理长方体在XZ平面的四个垂直角
+                if (Math.abs(ox) > halfWidth - cornerRadius && Math.abs(oz) > halfDepth - cornerRadius) {
+                    const cornerCenterX = Math.sign(ox) * (halfWidth - cornerRadius);
+                    const cornerCenterZ = Math.sign(oz) * (halfDepth - cornerRadius);
+                    
+                    const vecX = ox - cornerCenterX;
+                    const vecZ = oz - cornerCenterZ;
+                    const len = Math.hypot(vecX, vecZ);
+
+                    if (len > 0) {
+                        // 将顶点拉到圆角弧线上
+                        ox = cornerCenterX + (vecX / len) * cornerRadius;
+                        oz = cornerCenterZ + (vecZ / len) * cornerRadius;
+                    }
+                }
+                // --- 圆角逻辑结束 ---
+
+                let zOffset = 0;
+                // 只在身体正面应用胸部突起
                 if (base_oz > 0.499) { 
-                    zOffset = GEOMETRY_ENGINE.calculateDisplacement(ox, oy, x, width, params);
+                    // 使用原始的ox坐标来计算位移，以保证胸部形状不受圆角影响
+                    zOffset = GEOMETRY_ENGINE.calculateDisplacement(original_ox_for_bust, oy, x, width, params);
                 }
                 
                 positions[i] = ox;
