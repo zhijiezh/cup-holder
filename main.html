@@ -249,30 +249,46 @@
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         class ThreeApp {
             constructor() {
+                /**
+                 * @property {Object<string, THREE.Mesh|THREE.Group>} meshes - 统一管理场景中所有网格对象
+                 * @property {Object<string, THREE.Material>} materials - 统一管理所有材质
+                 * @property {string} currentThemeName - 当前激活的主题名称
+                 * @property {Object} appState - 存储应用的核心状态数据
+                 */
                 this.meshes = {};
                 this.materials = {};
                 this.currentThemeName = 'spongebob';
                 this.appState = {
-                    underbust: 68,
-                    targetBust: 88,
+                    underbust: 84,
+                    targetBust: 95.99,
                     foundShape: 0,
                 };
 
+                // --- 初始化流程 ---
                 this._setupScene();
                 this.setTheme(this.currentThemeName, true); // isInitial=true
                 this._setupGeometry();
                 this._setupEventListeners();
-                this.updateApp();
+                this.updateApp(); // 根据初始滑块值，首次更新模型状态
                 this._animate();
             }
 
             // --- 主流程 ---
+            /**
+             * 应用的主更新函数，作为所有更新的入口点。
+             * 流程: 读取UI -> 更新3D几何体 -> 更新UI显示
+             */
             updateApp() {
                 this._updateStateFromUI();
                 const params = this._updateGeometries();
                 this._updateUIDisplay(params);
             }
 
+            /**
+             * 设置并应用一个新主题。
+             * @param {string} themeName - 要应用的主题名称 (来自 THEMES 对象)。
+             * @param {boolean} [isInitial=false] - 是否为首次加载时的设置。
+             */
             setTheme(themeName, isInitial = false) {
                 this.currentThemeName = themeName;
                 const theme = THEMES[themeName] || THEMES.spongebob;
@@ -280,6 +296,7 @@
                 this._setupLighting(theme);
                 this.scene.background = new THREE.Color(theme.background);
 
+                // 如果不是首次加载（即用户通过UI切换主题），则需要应用新材质并强制刷新
                 if (!isInitial) {
                     this._applyMaterials();
                     this._updateVisibility();
@@ -288,6 +305,9 @@
             }
 
             // --- 私有设置方法 ---
+            /**
+             * 初始化场景、相机、渲染器和轨道控制器。
+             */
             _setupScene() {
                 this.scene = new THREE.Scene();
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -301,6 +321,9 @@
                 this.controls.target.set(0, BUST_Y_POS, 0);
             }
 
+            /**
+             * 创建所有几何体对象(Mesh)和组(Group)，并将它们添加到场景中。
+             */
             _setupGeometry() {
                 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
                 this.meshes.torsoTop = new THREE.Mesh(boxGeo, this.materials.body);
@@ -324,6 +347,9 @@
                 this._updateVisibility();
             }
 
+            /**
+             * 设置所有DOM元素的事件监听器，包括主题切换和滑块输入。
+             */
             _setupEventListeners() {
                 const themeSelector = DOM.themeSelector;
                 for (const themeName in THEMES) {
@@ -340,6 +366,9 @@
             }
 
             // --- 私有更新方法 ---
+            /**
+             * 从UI滑块读取输入值，更新appState，并运行求解器找到当前的shape值。
+             */
             _updateStateFromUI() {
                 this.appState.underbust = parseFloat(DOM.underbustSlider.value);
                 const minBust = this.appState.underbust;
@@ -352,6 +381,9 @@
                 this.appState.foundShape = SOLVER.findShapeForCirc(this.appState.targetBust, x);
             }
 
+            /**
+             * 根据当前appState中的参数，更新所有3D几何体的尺寸和位置。
+             */
             _updateGeometries() {
                 const x = this.appState.underbust / 6.0;
                 const width = 2 * x;
@@ -369,6 +401,10 @@
                 return params;
             }
             
+            /**
+             * 辅助函数：根据参数重建眼球的几何体。
+             * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
+             */
             _updateEyeballGeometry(params) {
                 let bustGeo;
                 if (params.mode === '圆柱 (c=x)') {
@@ -392,6 +428,10 @@
                 this.meshes.rightEyeball.geometry = bustGeo.clone();
             }
 
+            /**
+             * 辅助函数：根据参数更新瞳仁的大小和位置。
+             * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
+             */
             _updatePupilGeometry(params) {
                 const pupilRadius = params.r_hemi * 0.4;
                 this.meshes.leftPupil.scale.set(pupilRadius, pupilRadius, 1);
@@ -401,6 +441,10 @@
                 this.meshes.rightPupil.position.z = pupilZOffset;
             }
 
+            /**
+             * 根据计算结果更新页面上所有的调试信息文本。
+             * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
+             */
             _updateUIDisplay(params) {
                 DOM.underbustValue.textContent = this.appState.underbust.toFixed(0);
                 DOM.bustCircValue.textContent = this.appState.targetBust.toFixed(2);
@@ -412,6 +456,10 @@
             }
 
             // --- 主题与外观管理 ---
+            /**
+             * 根据主题定义，创建所有需要的材质实例。
+             * @param {Object} theme - 当前的主题对象。
+             */
             _setupMaterials(theme) {
                 const MaterialClass = theme.type === 'toon' ? THREE.MeshToonMaterial : THREE.MeshStandardMaterial;
                 for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil']) {
@@ -422,6 +470,10 @@
                     }
                 }
             }
+            /**
+             * 根据主题类型，设置场景的灯光。
+             * @param {Object} theme - 当前的主题对象。
+             */
             _setupLighting(theme) {
                 this.scene.children.filter(obj => obj.isLight).forEach(light => this.scene.remove(light));
                 if (theme.type === 'toon') {
@@ -435,6 +487,9 @@
                     this.scene.add(ambient, light);
                 }
             }
+            /**
+             * 将当前材质应用到所有对应的网格上。
+             */
             _applyMaterials() {
                 this.meshes.torsoTop.material = this.materials.body;
                 this.meshes.torsoShirt.material = this.materials.shirt;
@@ -442,12 +497,18 @@
                 this.meshes.leftEyeball.material = this.meshes.rightEyeball.material = this.materials.eye;
                 this.meshes.leftPupil.material = this.meshes.rightPupil.material = this.materials.pupil;
             }
+            /**
+             * 根据主题结构（一体式或三段式），更新身体部件的可见性。
+             */
             _updateVisibility() {
                 const theme = THEMES[this.currentThemeName];
                 const isTriPart = theme.structure === 'tri-part';
                 this.meshes.torsoShirt.visible = isTriPart;
                 this.meshes.torsoPants.visible = isTriPart;
             }
+            /**
+             * 根据主题结构和比例，更新躯干各部分的尺寸和位置。
+             */
             _updateTorsoAppearance(width, x) {
                 const theme = THEMES[this.currentThemeName];
                 if (theme.structure === 'tri-part') {
@@ -469,11 +530,17 @@
             }
 
             // --- 渲染与事件 ---
+            /**
+             * 渲染循环，持续更新控制器并渲染场景。
+             */
             _animate() {
                 requestAnimationFrame(() => this._animate());
                 this.controls.update();
                 this.renderer.render(this.scene, this.camera);
             }
+            /**
+             * 窗口大小改变时的响应函数。
+             */
             _onWindowResize() {
                 this.camera.aspect = window.innerWidth / window.innerHeight;
                 this.camera.updateProjectionMatrix();
