@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>统一的程序化几何模型 (v3)</title>
+    <style>
+        body { margin: 0; background-color: #111; color: white; }
+        canvas { display: block; }
+        #controls {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
+            font-family: sans-serif;
+            min-width: 350px;
+        }
+        #controls label, #readouts div { 
+            display: block; margin: 10px 0 5px; 
+        }
+        #readouts {
+            margin-top: 15px;
+            border-top: 1px solid #555;
+            padding-top: 10px;
+        }
+        #readouts div {
+            font-size: 1.1em;
+            color: #8f0;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <label for="underbust">下胸围 (cm): <span id="underbustValue">84</span></label>
+        <input type="range" id="underbust" min="60" max="120" value="84" step="1">
+
+        <label for="bustShape">胸部形态 (0-100): <span id="bustShapeValue">20</span></label>
+        <input type="range" id="bustShape" min="0" max="100" value="20" step="1">
+
+        <div id="readouts">
+            <div>上胸围 (几何): <span id="bustCircumferenceDisplay">...</span> cm</div>
+            <div style="font-size: 0.8em; color: #aaa;">
+                (x = <span id="xValue">...</span>, 
+                 r = <span id="rValue">...</span>, 
+                 h = <span id="hValue">...</span>)
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.skypack.dev/three@0.128.0/build/three.module.js",
+        "three/controls/": "https://cdn.skypack.dev/three@0.128.0/examples/jsm/controls/"
+      }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls, material, torsoMesh, torsoGeo;
+        let originalPositions; // 存储 (1,1,1) 盒子的原始顶点
+
+        const underbustSlider = document.getElementById('underbust');
+        const bustShapeSlider = document.getElementById('bustShape');
+
+        // --- 常量 ---
+        const TORSO_HEIGHT = 40; // 躯干高度 (y)
+        const SEGMENTS_W = 32; 
+        const SEGMENTS_H = 48; 
+        const SEGMENTS_D = 16; 
+        const BUST_Y_POS = TORSO_HEIGHT * 0.25; 
+
+        
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // █ █ █   几 何 引 擎 (GEOMETRY_ENGINE)   █ █ █
+        // █ █ █   已更新为您的 "恒定 x, 变化 r" 模型    █ █ █
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const GEOMETRY_ENGINE = {
+            
+            /**
+             * 1. 核心塑形函数 (视觉 + 数学)
+             * !! 关键改动 !!
+             * "胸部形态" (0-100) 现在控制 "球体半径 r"
+             * "凸起高度 h" 是计算的结果
+             */
+            getShapeParams: (shapeValue, x) => {
+                // "胸部形态" (0-100) 映射到 "球体半径 r"
+                // r_min 是半球 (r = x/2)。我们加一点点防止 NaN
+                const r_min = x / 2 + 0.01;
+                // r_max 是一个很大的值 (很平)
+                const r_max = x * 100;
+
+                // 我们使用 "指数" 映射，这样滑块在 "小" 的时候变化更灵敏
+                const shapeNormalized = shapeValue / 100.0;
+                // r = r_max * (r_min / r_max) ^ (shapeNormalized)
+                const r = r_max * Math.pow(r_min / r_max, shapeNormalized);
+
+                // !! 关键: 根据您的模型, "凸起高度 h" 是 "r" 和 "x" 的函数 !!
+                // r^2 = (x/2)^2 + (r-h)^2
+                // (r-h) = sqrt(r^2 - (x/2)^2)
+                // h = r - sqrt(r^2 - (x/2)^2)
+                const h = r - Math.sqrt(r * r - (x / 2) * (x / 2));
+                
+                return {
+                    mode: 'sphere',
+                    r: r,           // 球体半径 (变量)
+                    h: h,           // 凸起高度 (结果)
+                    c: x,           // 弦长/底面直径 (恒定为 x)
+                    y: 0
+                };
+            },
+
+            /**
+             * 2. 顶点位移函数 (视觉)
+             * !! 关键改动 !!
+             * 严格按照 "恒定底面 c=x" 来应用
+             */
+            calculateDisplacement: (ox, oy, x, width, params) => {
+                const BUST_X_POS = width * 0.25; 
+                const leftCenter = { x: -BUST_X_POS, y: BUST_Y_POS };
+                const rightCenter = { x: BUST_X_POS, y: BUST_Y_POS };
+                
+                // c (弦长) 恒定为 x
+                const { r, h, c } = params; 
+
+                const distLeft = Math.hypot(ox - leftCenter.x, oy - leftCenter.y);
+                const distRight = Math.hypot(ox - rightCenter.x, oy - rightCenter.y);
+
+                let zL = 0, zR = 0;
+                
+                // 左胸: 只有在 "底面圆" (直径 c=x) 内部才计算凸起
+                if (distLeft < c / 2) {
+                    // zOffset = h - (r - sqrt(r*r - dist^2))
+                    zL = Math.sqrt(r*r - distLeft*distLeft) - r + h;
+                }
+                
+                // 右胸
+                if (distRight < c / 2) {
+                    zR = Math.sqrt(r*r - distRight*distRight) - r + h;
+                }
+
+                return Math.max(zL, zR);
+            },
+
+            /**
+             * 3. 精确测量函数 (数学)
+             * 这个函数现在接收到 "正确" 的 r, 所以它的计算结果是正确的
+             */
+            calculateBustCircumference: (params, x) => {
+                const { r } = params;
+                const chord_half = x / 2;
+
+                // 您的公式: 弧长 = arcsin( (x/2) / r ) * 2r
+                const arcLength = 2 * r * Math.asin(chord_half / r);
+                
+                // 您的周长公式: 2 * (弧长) + 5x
+                return (2 * arcLength) + (5 * x);
+            }
+        };
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // █ █ █   (几何引擎 结束)   █ █ █
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, TORSO_HEIGHT * 0.5, 40);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            const ambient = new THREE.AmbientLight(0x404040, 2);
+            scene.add(ambient);
+            const light = new THREE.DirectionalLight(0xffffff, 2);
+            light.position.set(10, 30, 50);
+            scene.add(light);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, BUST_Y_POS, 0);
+            controls.update();
+
+            material = new THREE.MeshStandardMaterial({
+                color: 0x008cff,
+                roughness: 0.5,
+                wireframe: false 
+            });
+
+            // --- 关键改动: 创建一个 (1,1,1) 的基础几何体 ---
+            torsoGeo = new THREE.BoxGeometry(
+                1, 1, 1, 
+                SEGMENTS_W, SEGMENTS_H, SEGMENTS_D
+            );
+            // 存储原始的 (-0.5 到 0.5) 的顶点
+            originalPositions = torsoGeo.attributes.position.array.slice();
+
+            torsoMesh = new THREE.Mesh(torsoGeo, material);
+            scene.add(torsoMesh);
+
+            // --- 关键改动: 两个滑块都调用同一个函数 ---
+            underbustSlider.addEventListener('input', updateModel);
+            bustShapeSlider.addEventListener('input', updateModel);
+            
+            // 首次更新
+            updateModel();
+
+            animate();
+        }
+
+        /**
+         * 4. 统一的更新函数 (高性能)
+         * !! 关键改动 !!
+         * 两个滑块都会实时调用这个函数
+         */
+        function updateModel() {
+            // --- 1. 读取输入 ---
+            const underbust = parseFloat(underbustSlider.value);
+            const shapeValue = parseFloat(bustShapeSlider.value);
+            
+            // --- 2. 计算躯干尺寸 ---
+            // 您的公式: 下胸围 = 6x
+            const x = underbust / 6.0; // 深度
+            const width = 2 * x;       // 宽度
+
+            // --- 3. 计算胸部形态参数 (视觉+数学) ---
+            const params = GEOMETRY_ENGINE.getShapeParams(shapeValue, x);
+            
+            // --- 4. 实时更新顶点 (核心) ---
+            const positions = torsoGeo.attributes.position.array;
+
+            for (let i = 0; i < positions.length; i += 3) {
+                // 获取基础的 (-0.5 到 0.5) 坐标
+                const base_ox = originalPositions[i];
+                const base_oy = originalPositions[i + 1];
+                const base_oz = originalPositions[i + 2];
+
+                // a. 实时缩放躯干
+                const ox = base_ox * width;
+                const oy = base_oy * TORSO_HEIGHT;
+                const oz = base_oz * x;
+
+                let zOffset = 0;
+                
+                // b. 实时应用顶点位移 (只对前面板)
+                if (base_oz > 0.499) { // (基础坐标 > 0.499, 即前面板)
+                    zOffset = GEOMETRY_ENGINE.calculateDisplacement(ox, oy, x, width, params);
+                }
+                
+                // c. 设置最终坐标
+                positions[i] = ox;
+                positions[i + 1] = oy;
+                positions[i + 2] = oz + zOffset;
+            }
+
+            // --- 5. 通知 Three.js 更新 ---
+            torsoGeo.attributes.position.needsUpdate = true;
+            torsoGeo.computeVertexNormals();
+            torsoGeo.computeBoundingSphere(); // 重新计算包围盒
+
+            // --- 6. 实时更新测量读数 ---
+            const circumference = GEOMETRY_ENGINE.calculateBustCircumference(params, x);
+            
+            // 更新所有 UI 读数
+            document.getElementById('underbustValue').textContent = underbust;
+            document.getElementById('bustShapeValue').textContent = shapeValue;
+            document.getElementById('bustCircumferenceDisplay').textContent = circumference.toFixed(2);
+            document.getElementById('xValue').textContent = x.toFixed(2);
+            document.getElementById('rValue').textContent = params.r.toFixed(2);
+            document.getElementById('hValue').textContent = params.h.toFixed(2);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- 启动 ---
+        init();
+    </script>
+</body>
+</html>
