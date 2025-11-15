@@ -75,9 +75,7 @@
         // █   全局变量 & 状态管理
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         let scene, camera, renderer, controls;
-        let meshes = {}; // 用一个对象来统一管理所有网格
 
-        // 主题和材质管理
         const THEMES = {
             spongebob: {
                 background: 0x87ceeb, // 天蓝色
@@ -132,64 +130,6 @@
             }
         };
 
-        const MATERIALS = {}; // 存放实例化的材质
-
-        const THEME_MANAGER = {
-            currentThemeName: 'spongebob',
-
-            setTheme(themeName) {
-                this.currentThemeName = themeName;
-                const theme = THEMES[themeName] || THEMES.spongebob;
-                setupMaterials(theme);
-                setupLighting(theme);
-                scene.background = new THREE.Color(theme.background);
-
-                if (meshes.torsoTop) {
-                    this.applyMaterials();
-                    this.updateVisibility();
-                    updateApp();
-                }
-            },
-
-            updateAppearance(width, x) {
-                const theme = THEMES[this.currentThemeName];
-                if (theme.structure === 'tri-part') {
-                    const shirtHeight = TORSO_HEIGHT * theme.proportions.shirt;
-                    const pantsHeight = TORSO_HEIGHT * theme.proportions.pants;
-                    const topHeight = TORSO_HEIGHT - shirtHeight - pantsHeight;
-
-                    meshes.torsoTop.scale.set(width, topHeight, x);
-                    meshes.torsoTop.position.y = (shirtHeight + pantsHeight) / 2;
-
-                    meshes.torsoShirt.scale.set(width, shirtHeight, x);
-                    meshes.torsoShirt.position.y = (pantsHeight - topHeight) / 2;
-
-                    meshes.torsoPants.scale.set(width, pantsHeight, x);
-                    meshes.torsoPants.position.y = (-topHeight - shirtHeight) / 2;
-                } else { 
-                    meshes.torsoTop.scale.set(width, TORSO_HEIGHT, x);
-                    meshes.torsoTop.position.y = 0;
-
-                    meshes.torsoShirt.scale.set(0, 0, 0);
-                    meshes.torsoPants.scale.set(0, 0, 0);
-                }
-            },
-            applyMaterials() {
-                meshes.torsoTop.material = MATERIALS.body;
-                meshes.torsoShirt.material = MATERIALS.shirt;
-                meshes.torsoPants.material = MATERIALS.pants;
-                meshes.leftEyeball.material = meshes.rightEyeball.material = MATERIALS.eye; // 注意: Eyeball 和 Pupil 的材质是分开的
-                meshes.leftPupil.material = meshes.rightPupil.material = MATERIALS.pupil;
-            },
-            updateVisibility() {
-                const theme = THEMES[this.currentThemeName];
-                const isTriPart = theme.structure === 'tri-part';
-
-                meshes.torsoShirt.visible = isTriPart;
-                meshes.torsoPants.visible = isTriPart;
-            }
-        };
-
         const DOM = {
             themeSelector: document.getElementById('themeSelector'),
             underbustSlider: document.getElementById('underbust'),
@@ -206,17 +146,11 @@
         // 常量
         const TORSO_HEIGHT = 40; 
         const SEGMENTS_W = 1, SEGMENTS_H = 1, SEGMENTS_D = 1; 
-        const BUST_Y_POS = TORSO_HEIGHT * 0.25;
+        const BUST_Y_POS_BASE = TORSO_HEIGHT * 0.25; // 眼睛的基础Y轴位置
+        const EYE_Y_OFFSET = 2.0; // 将眼睛整体向下偏移的量
+        const BUST_Y_POS = BUST_Y_POS_BASE - EYE_Y_OFFSET;
         const PIECEWISE_THRESHOLD = 50; 
         const PI = Math.PI;
-
-        // 应用状态
-        const APP_STATE = {
-            underbust: 84,
-            targetBust: 95.99,
-            foundShape: 0,
-        };
-
         
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // █   1. 统一的几何引擎 (GEOMETRY_ENGINE)
@@ -246,8 +180,8 @@
                 } else {
                     // --- 方案B: "圆柱+半球" (c=x) ---
                     const shapeNorm = (shapeValue - PIECEWISE_THRESHOLD) / (100 - PIECEWISE_THRESHOLD);
-                    const y_max = x * 1.5;
-                    const y = shapeNorm * y_max;
+                    // 移除 y_max 上限，让 y 直接与 shapeNorm 成正比
+                    const y = shapeNorm * x * 1.5;
                     const h = y + r_hemi;
                     return { 
                         mode: '圆柱 (c=x)', 
@@ -281,256 +215,274 @@
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         const SOLVER = {
             findShapeForCirc: (targetCirc, x) => {
-                let minShape = 0;
-                let maxShape = 100;
-                let bestShape = 0;
-                for (let i = 0; i < 15; i++) {
-                    const midShape = (minShape + maxShape) / 2;
-                    bestShape = midShape;
-                    
-                    // !! 关键: 调用统一的引擎 !!
-                    const params = GEOMETRY_ENGINE.getShapeParams(midShape, x);
-                    const currentCirc = GEOMETRY_ENGINE.calculateBustCircumference(params, x);
+                // 1. 首先检查目标值是否在 0-100 的标准范围内
+                const params100 = GEOMETRY_ENGINE.getShapeParams(100, x);
+                const circAt100 = GEOMETRY_ENGINE.calculateBustCircumference(params100, x);
 
-                    if (currentCirc < targetCirc) {
-                        minShape = midShape;
-                    } else {
-                        maxShape = midShape;
+                if (targetCirc <= circAt100) {
+                    // a. 如果在范围内，使用二分查找，精准高效
+                    let minShape = 0;
+                    let maxShape = 100;
+                    for (let i = 0; i < 15; i++) {
+                        const midShape = (minShape + maxShape) / 2;
+                        const params = GEOMETRY_ENGINE.getShapeParams(midShape, x);
+                        const currentCirc = GEOMETRY_ENGINE.calculateBustCircumference(params, x);
+                        if (currentCirc < targetCirc) minShape = midShape;
+                        else maxShape = midShape;
                     }
+                    return (minShape + maxShape) / 2;
+                } else {
+                    // b. 如果超出范围，直接通过数学公式反向求解 shape > 100 的值
+                    // 公式: circ = (5*x) + (2*y) + (PI*x/2)  且  y = ((shape-50)/50) * x * 1.5
+                    // 联立求解 shape:
+                    const y_target = (targetCirc - (5 * x) - (PI * x / 2)) / 2;
+                    const shapeNorm_target = y_target / (x * 1.5);
+                    const shape_target = shapeNorm_target * 50 + 50;
+                    return shape_target;
                 }
-                return bestShape;
             }
         };
         
-        /**
-         * 主更新函数，负责协调所有更新
-         */
-        function updateApp() {
-            updateStateFromUI();
-            const params = updateGeometries();
-            updateUIDisplay(params);
-        }
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // █   3. 应用主类 (ThreeApp)
+        // █ █ █   封装所有状态和逻辑，为React集成做准备 █ █ █
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        class ThreeApp {
+            constructor() {
+                this.meshes = {};
+                this.materials = {};
+                this.currentThemeName = 'spongebob';
+                this.appState = {
+                    underbust: 68,
+                    targetBust: 88,
+                    foundShape: 0,
+                };
 
-        /**
-         * 从UI滑块读取输入并更新应用状态
-         */
-        function updateStateFromUI() {
-            APP_STATE.underbust = parseFloat(DOM.underbustSlider.value);
-
-            // 约束上胸围滑块范围
-            const minBust = APP_STATE.underbust;
-            const maxBust = APP_STATE.underbust + 200;
-            DOM.bustCircSlider.min = minBust.toFixed(2);
-            DOM.bustCircSlider.max = maxBust.toFixed(2);
-
-            // 读取并约束上胸围值
-            let targetBust = parseFloat(DOM.bustCircSlider.value);
-            APP_STATE.targetBust = Math.max(minBust, Math.min(targetBust, maxBust));
-
-            // 运行求解器
-            const x = APP_STATE.underbust / 6.0;
-            APP_STATE.foundShape = SOLVER.findShapeForCirc(APP_STATE.targetBust, x);
-        }
-
-        /**
-         * 根据当前状态更新所有3D几何体
-         */
-        function updateGeometries() {
-            const x = APP_STATE.underbust / 6.0;
-            const width = 2 * x;
-            const halfDepth = x / 2;
-
-            // 获取统一参数
-            const params = GEOMETRY_ENGINE.getShapeParams(APP_STATE.foundShape, x);
-
-            // --- 更新眼睛几何体 (眼球+瞳仁) ---
-            const BUST_X_POS = width * 0.25;
-            let bustGeo;
-
-            if (params.mode === '圆柱 (c=x)') {
-                // --- 大胸模式: 使用独立的几何体 ---
-                const { y, r_hemi } = params;
-
-                // a. 创建圆柱和半球
-                const cylinderGeo = new THREE.CylinderGeometry(r_hemi, r_hemi, y, 32);
-                const sphereGeo = new THREE.SphereGeometry(r_hemi, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-                
-                // b. 定位并合并
-                cylinderGeo.translate(0, y / 2, 0);
-                sphereGeo.translate(0, y, 0);
-                bustGeo = mergeBufferGeometries([cylinderGeo, sphereGeo]);
-                
-                // c. 旋转使其朝向前方 (Z轴)
-                bustGeo.rotateX(Math.PI / 2);
-
-            } else {
-                // 小胸模式: 使用球帽几何体
-                const { r_A, r_hemi, h } = params;
-                
-                // 计算球帽的角度
-                const thetaLength = Math.asin(r_hemi / r_A);
-
-                // b. 创建球帽几何体
-                bustGeo = new THREE.SphereGeometry(r_A, 32, 16, 0, Math.PI * 2, 0, thetaLength);
-                
-                // c. 旋转并定位，使其底部与身体表面对齐
-                bustGeo.rotateX(Math.PI / 2); // 使其朝向前方 (Z轴)
-                bustGeo.translate(0, 0, -(r_A - h)); // 将球帽的"底面"移动到 Z=0 平面
+                this._setupScene();
+                this.setTheme(this.currentThemeName, true); // isInitial=true
+                this._setupGeometry();
+                this._setupEventListeners();
+                this.updateApp();
+                this._animate();
             }
 
-            // 更新眼球
-            meshes.leftEyeball.geometry.dispose();
-            meshes.rightEyeball.geometry.dispose();
-            meshes.leftEyeball.geometry = bustGeo;
-            meshes.rightEyeball.geometry = bustGeo.clone();
-
-            // 更新瞳仁 (平面)
-            const pupilRadius = params.r_hemi * 0.4;
-            const pupilGeo = new THREE.CircleGeometry(pupilRadius, 16);
-            meshes.leftPupil.geometry.dispose();
-            meshes.rightPupil.geometry.dispose();
-            meshes.leftPupil.geometry = pupilGeo; // 左瞳仁
-            meshes.rightPupil.geometry = pupilGeo.clone(); // 右瞳仁
-            
-            // 定位瞳仁在眼球表面
-            const pupilZOffset = params.h + 0.1; // 稍微向前偏移以防止渲染冲突 (Z-fighting)
-            meshes.leftPupil.position.z = pupilZOffset;
-            meshes.rightPupil.position.z = pupilZOffset;
-
-            // --- 更新躯干外观 (委托给主题管理器) ---
-            THEME_MANAGER.updateAppearance(width, x);
-
-            // 定位整个眼睛 Group
-            meshes.leftEyeGroup.position.set(-BUST_X_POS, BUST_Y_POS, halfDepth);
-            meshes.rightEyeGroup.position.set(BUST_X_POS, BUST_Y_POS, halfDepth); // 修复: 右眼应该在正X轴
-
-            return params; // 将参数传出给UI更新函数
-        }
-
-        /**
-         * 根据计算结果更新页面上的所有文本读数
-         */
-        function updateUIDisplay(params) {
-            DOM.underbustValue.textContent = APP_STATE.underbust.toFixed(0);
-            DOM.bustCircValue.textContent = APP_STATE.targetBust.toFixed(2);
-            
-            DOM.modeValue.textContent = params.mode;
-            DOM.xValue.textContent = (APP_STATE.underbust / 6.0).toFixed(2);
-            DOM.yValue.textContent = params.y.toFixed(2);
-            DOM.r_AValue.textContent = params.r_A.toFixed(2);
-            DOM.shapeValue.textContent = APP_STATE.foundShape.toFixed(2);
-        }
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // █   初始化 & 渲染循环
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        function setupScene() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, TORSO_HEIGHT * 0.5, 40);
-
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
-
-            controls = new OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, BUST_Y_POS, 0);
-        }
-
-        function setupLighting(theme) {
-            // 清理旧灯光
-            scene.children.filter(obj => obj.isLight).forEach(light => scene.remove(light));
-
-            if (theme.type === 'toon') {
-                const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2.5);
-                light.position.set(0, 100, 0);
-                scene.add(light);
-            } else {
-                const ambient = new THREE.AmbientLight(0x404040, 2);
-                const light = new THREE.DirectionalLight(0xffffff, 2);
-                light.position.set(10, 30, 50);
-                scene.add(ambient, light);
+            // --- 主流程 ---
+            updateApp() {
+                this._updateStateFromUI();
+                const params = this._updateGeometries();
+                this._updateUIDisplay(params);
             }
-        }
 
-        function setupMaterials(theme) {
-            const MaterialClass = theme.type === 'toon' ? THREE.MeshToonMaterial : THREE.MeshStandardMaterial;
+            setTheme(themeName, isInitial = false) {
+                this.currentThemeName = themeName;
+                const theme = THEMES[themeName] || THEMES.spongebob;
+                this._setupMaterials(theme);
+                this._setupLighting(theme);
+                this.scene.background = new THREE.Color(theme.background);
 
-            for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil']) {
-                if (theme[key]) {
-                    const props = { ...theme[key] };
-                    // 关键修复: 瞳仁是平面，需要渲染双面
-                    if (key === 'pupil') props.side = THREE.DoubleSide;
-                    MATERIALS[key] = new MaterialClass(props);
+                if (!isInitial) {
+                    this._applyMaterials();
+                    this._updateVisibility();
+                    this.updateApp();
                 }
             }
-        }
 
-        function setupGeometry() {
-            const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-            meshes.torsoTop = new THREE.Mesh(boxGeo, MATERIALS.body);
-            meshes.torsoShirt = new THREE.Mesh(boxGeo, MATERIALS.shirt);
-            meshes.torsoPants = new THREE.Mesh(boxGeo, MATERIALS.pants);
+            // --- 私有设置方法 ---
+            _setupScene() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, TORSO_HEIGHT * 0.5, 40);
 
-            THEME_MANAGER.updateVisibility();
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                document.body.appendChild(this.renderer.domElement);
 
-            // 创建眼睛 (眼球+瞳仁的组合)
-            meshes.leftEyeGroup = new THREE.Group();
-            meshes.rightEyeGroup = new THREE.Group();
-
-            meshes.leftEyeball = new THREE.Mesh(new THREE.BufferGeometry(), MATERIALS.eye);
-            meshes.rightEyeball = new THREE.Mesh(new THREE.BufferGeometry(), MATERIALS.eye);
-            meshes.leftPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), MATERIALS.pupil);
-            meshes.rightPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), MATERIALS.pupil);
-
-            meshes.leftEyeGroup.add(meshes.leftEyeball, meshes.leftPupil);
-            meshes.rightEyeGroup.add(meshes.rightEyeball, meshes.rightPupil);
-
-            scene.add(
-                meshes.torsoTop, meshes.torsoShirt, meshes.torsoPants,
-                meshes.leftEyeGroup, meshes.rightEyeGroup
-            );
-        }
-
-        function setupEventListeners() {
-            const themeSelector = DOM.themeSelector;
-            for (const themeName in THEMES) {
-                const option = document.createElement('option');
-                option.value = themeName;
-                option.textContent = themeName.charAt(0).toUpperCase() + themeName.slice(1);
-                themeSelector.appendChild(option);
+                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.target.set(0, BUST_Y_POS, 0);
             }
-            themeSelector.value = THEME_MANAGER.currentThemeName;
 
-            themeSelector.addEventListener('change', (event) => {
-                THEME_MANAGER.setTheme(event.target.value);
-            });
+            _setupGeometry() {
+                const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+                this.meshes.torsoTop = new THREE.Mesh(boxGeo, this.materials.body);
+                this.meshes.torsoShirt = new THREE.Mesh(boxGeo, this.materials.shirt);
+                this.meshes.torsoPants = new THREE.Mesh(boxGeo, this.materials.pants);
 
-            DOM.underbustSlider.addEventListener('input', updateApp);
-            DOM.bustCircSlider.addEventListener('input', updateApp);
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
+                this.meshes.leftEyeGroup = new THREE.Group();
+                this.meshes.rightEyeGroup = new THREE.Group();
+                this.meshes.leftEyeball = new THREE.Mesh(new THREE.BufferGeometry(), this.materials.eye);
+                this.meshes.rightEyeball = new THREE.Mesh(new THREE.BufferGeometry(), this.materials.eye);
+                this.meshes.leftPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
+                this.meshes.rightPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
+
+                this.meshes.leftEyeGroup.add(this.meshes.leftEyeball, this.meshes.leftPupil);
+                this.meshes.rightEyeGroup.add(this.meshes.rightEyeball, this.meshes.rightPupil);
+
+                this.scene.add(
+                    this.meshes.torsoTop, this.meshes.torsoShirt, this.meshes.torsoPants,
+                    this.meshes.leftEyeGroup, this.meshes.rightEyeGroup
+                );
+                this._updateVisibility();
+            }
+
+            _setupEventListeners() {
+                const themeSelector = DOM.themeSelector;
+                for (const themeName in THEMES) {
+                    const option = document.createElement('option');
+                    option.value = themeName;
+                    option.textContent = themeName.charAt(0).toUpperCase() + themeName.slice(1);
+                    themeSelector.appendChild(option);
+                }
+                themeSelector.value = this.currentThemeName;
+                themeSelector.addEventListener('change', (event) => this.setTheme(event.target.value));
+                DOM.underbustSlider.addEventListener('input', () => this.updateApp());
+                DOM.bustCircSlider.addEventListener('input', () => this.updateApp());
+                window.addEventListener('resize', () => this._onWindowResize());
+            }
+
+            // --- 私有更新方法 ---
+            _updateStateFromUI() {
+                this.appState.underbust = parseFloat(DOM.underbustSlider.value);
+                const minBust = this.appState.underbust;
+                const maxBust = this.appState.underbust + 200;
+                DOM.bustCircSlider.min = minBust.toFixed(2);
+                DOM.bustCircSlider.max = maxBust.toFixed(2);
+                let targetBust = parseFloat(DOM.bustCircSlider.value);
+                this.appState.targetBust = Math.max(minBust, Math.min(targetBust, maxBust));
+                const x = this.appState.underbust / 6.0;
+                this.appState.foundShape = SOLVER.findShapeForCirc(this.appState.targetBust, x);
+            }
+
+            _updateGeometries() {
+                const x = this.appState.underbust / 6.0;
+                const width = 2 * x;
+                const halfDepth = x / 2;
+                const params = GEOMETRY_ENGINE.getShapeParams(this.appState.foundShape, x);
+
+                this._updateEyeballGeometry(params);
+                this._updatePupilGeometry(params);
+                this._updateTorsoAppearance(width, x);
+
+                const BUST_X_POS = width * 0.25;
+                this.meshes.leftEyeGroup.position.set(-BUST_X_POS, BUST_Y_POS, halfDepth);
+                this.meshes.rightEyeGroup.position.set(BUST_X_POS, BUST_Y_POS, halfDepth);
+
+                return params;
+            }
+            
+            _updateEyeballGeometry(params) {
+                let bustGeo;
+                if (params.mode === '圆柱 (c=x)') {
+                    const { y, r_hemi } = params;
+                    const cylinderGeo = new THREE.CylinderGeometry(r_hemi, r_hemi, y, 32);
+                    const sphereGeo = new THREE.SphereGeometry(r_hemi, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+                    cylinderGeo.translate(0, y / 2, 0);
+                    sphereGeo.translate(0, y, 0);
+                    bustGeo = mergeBufferGeometries([cylinderGeo, sphereGeo]);
+                    bustGeo.rotateX(Math.PI / 2);
+                } else {
+                    const { r_A, r_hemi, h } = params;
+                    const thetaLength = Math.asin(r_hemi / r_A);
+                    bustGeo = new THREE.SphereGeometry(r_A, 32, 16, 0, Math.PI * 2, 0, thetaLength);
+                    bustGeo.rotateX(Math.PI / 2);
+                    bustGeo.translate(0, 0, -(r_A - h));
+                }
+                this.meshes.leftEyeball.geometry.dispose();
+                this.meshes.rightEyeball.geometry.dispose();
+                this.meshes.leftEyeball.geometry = bustGeo;
+                this.meshes.rightEyeball.geometry = bustGeo.clone();
+            }
+
+            _updatePupilGeometry(params) {
+                const pupilRadius = params.r_hemi * 0.4;
+                this.meshes.leftPupil.scale.set(pupilRadius, pupilRadius, 1);
+                this.meshes.rightPupil.scale.set(pupilRadius, pupilRadius, 1);
+                const pupilZOffset = params.h + 0.1;
+                this.meshes.leftPupil.position.z = pupilZOffset;
+                this.meshes.rightPupil.position.z = pupilZOffset;
+            }
+
+            _updateUIDisplay(params) {
+                DOM.underbustValue.textContent = this.appState.underbust.toFixed(0);
+                DOM.bustCircValue.textContent = this.appState.targetBust.toFixed(2);
+                DOM.modeValue.textContent = params.mode;
+                DOM.xValue.textContent = (this.appState.underbust / 6.0).toFixed(2);
+                DOM.yValue.textContent = params.y.toFixed(2);
+                DOM.r_AValue.textContent = params.r_A.toFixed(2);
+                DOM.shapeValue.textContent = this.appState.foundShape.toFixed(2);
+            }
+
+            // --- 主题与外观管理 ---
+            _setupMaterials(theme) {
+                const MaterialClass = theme.type === 'toon' ? THREE.MeshToonMaterial : THREE.MeshStandardMaterial;
+                for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil']) {
+                    if (theme[key]) {
+                        const props = { ...theme[key] };
+                        if (key === 'pupil') props.side = THREE.DoubleSide;
+                        this.materials[key] = new MaterialClass(props);
+                    }
+                }
+            }
+            _setupLighting(theme) {
+                this.scene.children.filter(obj => obj.isLight).forEach(light => this.scene.remove(light));
+                if (theme.type === 'toon') {
+                    const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2.5);
+                    light.position.set(0, 100, 0);
+                    this.scene.add(light);
+                } else {
+                    const ambient = new THREE.AmbientLight(0x404040, 2);
+                    const light = new THREE.DirectionalLight(0xffffff, 2);
+                    light.position.set(10, 30, 50);
+                    this.scene.add(ambient, light);
+                }
+            }
+            _applyMaterials() {
+                this.meshes.torsoTop.material = this.materials.body;
+                this.meshes.torsoShirt.material = this.materials.shirt;
+                this.meshes.torsoPants.material = this.materials.pants;
+                this.meshes.leftEyeball.material = this.meshes.rightEyeball.material = this.materials.eye;
+                this.meshes.leftPupil.material = this.meshes.rightPupil.material = this.materials.pupil;
+            }
+            _updateVisibility() {
+                const theme = THEMES[this.currentThemeName];
+                const isTriPart = theme.structure === 'tri-part';
+                this.meshes.torsoShirt.visible = isTriPart;
+                this.meshes.torsoPants.visible = isTriPart;
+            }
+            _updateTorsoAppearance(width, x) {
+                const theme = THEMES[this.currentThemeName];
+                if (theme.structure === 'tri-part') {
+                    const shirtHeight = TORSO_HEIGHT * theme.proportions.shirt;
+                    const pantsHeight = TORSO_HEIGHT * theme.proportions.pants;
+                    const topHeight = TORSO_HEIGHT - shirtHeight - pantsHeight;
+                    this.meshes.torsoTop.scale.set(width, topHeight, x);
+                    this.meshes.torsoTop.position.y = (shirtHeight + pantsHeight) / 2;
+                    this.meshes.torsoShirt.scale.set(width, shirtHeight, x);
+                    this.meshes.torsoShirt.position.y = (pantsHeight - topHeight) / 2;
+                    this.meshes.torsoPants.scale.set(width, pantsHeight, x);
+                    this.meshes.torsoPants.position.y = (-topHeight - shirtHeight) / 2;
+                } else {
+                    this.meshes.torsoTop.scale.set(width, TORSO_HEIGHT, x);
+                    this.meshes.torsoTop.position.y = 0;
+                    this.meshes.torsoShirt.scale.set(0, 0, 0);
+                    this.meshes.torsoPants.scale.set(0, 0, 0);
+                }
+            }
+
+            // --- 渲染与事件 ---
+            _animate() {
+                requestAnimationFrame(() => this._animate());
+                this.controls.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+            _onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
         }
-        
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-        }
 
-        function init() {
-            setupScene();
-            THEME_MANAGER.setTheme('spongebob'); // 设置初始主题
-            setupGeometry();
-            setupEventListeners();
-            updateApp(); // 关键修复: 在所有设置完成后，手动调用一次，以确保初始状态正确
-            animate();
-        }
-
-        init();
+        // 启动应用
+        new ThreeApp();
     </script>
 </body>
 </html>
