@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>视觉/数学 并行版 (v7 - 最终)</title>
+    <title>逆向求解 并行版 (v9.1 - 完整调试)</title>
     <style>
         /* 样式保持不变 */
         body { margin: 0; background-color: #111; color: white; }
@@ -22,11 +22,12 @@
         }
         #readouts div {
             font-size: 1.1em;
-            color: #8f0; /* "计算" 读数的颜色 */
+            color: #8f0; 
         }
-        #visual-readout {
+        #debug-readout {
             font-size: 0.8em; 
-            color: #aaa; /* "视觉" 调试的颜色 */
+            color: #aaa; 
+            line-height: 1.6;
         }
     </style>
 </head>
@@ -36,17 +37,19 @@
         <label for="underbust">下胸围 (cm): <span id="underbustValue">84</span></label>
         <input type="range" id="underbust" min="60" max="120" value="84" step="1">
 
-        <label for="bustShape">胸部形态 (0-100): <span id="bustShapeValue">20</span></label>
-        <input type="range" id="bustShape" min="0" max="100" value="20" step="1">
+        <label for="bustCirc">上胸围 (cm): <span id="bustCircValue">89.14</span></label>
+        <input type="range" id="bustCirc" min="84" max="160" value="89.14" step="0.01">
 
         <div id="readouts">
-            <div>上胸围 (公式): <span id="bustCircumferenceDisplay">...</span> cm</div>
-            
-            <div id="visual-readout">
-                (视觉模式: <span id="modeValue">...</span>, 
-                 视觉 r = <span id="rValue">...</span>, 
-                 视觉 h = <span id="hValue">...</span>,
-                 视觉 y = <span id="yValue">...</span>)
+            <div id="debug-readout">
+                <b>数学值 (您的公式):</b><br>
+                x = <span id="xValue">...</span>, 
+                y = <span id="math_y">...</span>, 
+                r_A = <span id="math_r_A">...</span>
+                <br>
+                <b>引擎状态:</b><br>
+                求解 shape = <span id="shapeValue">...</span>, 
+                视觉模式 = <span id="modeValue">...</span>
             </div>
         </div>
     </div>
@@ -68,60 +71,49 @@
         let originalPositions; 
 
         const underbustSlider = document.getElementById('underbust');
-        const bustShapeSlider = document.getElementById('bustShape');
+        const bustCircSlider = document.getElementById('bustCirc');
 
-        // --- 常量 ---
+        // ... (常量) ...
         const TORSO_HEIGHT = 40; 
-        const SEGMENTS_W = 32; 
-        const SEGMENTS_H = 48; 
-        const SEGMENTS_D = 16; 
+        const SEGMENTS_W = 32, SEGMENTS_H = 48, SEGMENTS_D = 16; 
         const BUST_Y_POS = TORSO_HEIGHT * 0.25;
         const PIECEWISE_THRESHOLD = 50; 
         const PI = Math.PI;
-        const X_DEBUG = 14; // (84 / 6)
 
         
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // █ █ █   1. 视觉引擎 (VISUAL_ENGINE)   █ █ █
-        // █ █ █   (v6 模型: c=x, 4x+...)        █ █ █
-        // █ █ █   只负责您 "看到" 的 3D 模型        █ █ █
+        // █ █ █   (v6 模型: c=x) - 只负责 "看"   █ █ █
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         const VISUAL_ENGINE = {
-            
             getShapeParams: (shapeValue, x) => {
                 const r_hemi = x / 2; // "视觉" 模型的底座半径
                 if (shapeValue < PIECEWISE_THRESHOLD) {
-                    // --- 方案A: "球面被切" (c=x) ---
                     const shapeNorm = shapeValue / PIECEWISE_THRESHOLD;
-                    const r_max = x * 100;
-                    const r_min = r_hemi + 0.001; 
+                    const r_max = x * 100, r_min = r_hemi + 0.001; 
                     const r_A = r_max * Math.pow(r_min / r_max, shapeNorm);
                     const h = r_A - Math.sqrt(r_A * r_A - r_hemi * r_hemi);
-                    return { mode: '视觉 (球面 c=x)', r_A: r_A, h: h, y: 0, r_hemi: r_hemi };
+                    return { mode: '球面 (c=x)', r_A: r_A, h: h, y: 0, r_hemi: r_hemi };
                 } else {
-                    // --- 方案B: "圆柱+半球" (c=x) ---
                     const shapeNorm = (shapeValue - PIECEWISE_THRESHOLD) / (100 - PIECEWISE_THRESHOLD);
-                    const y = shapeNorm * (x * 1.5); // y_max
+                    const y = shapeNorm * (x * 1.5); 
                     const h = y + r_hemi;
-                    return { mode: '视觉 (圆柱 c=x)', r_A: r_hemi, h: h, y: y, r_hemi: r_hemi };
+                    return { mode: '圆柱 (c=x)', r_A: r_hemi, h: h, y: y, r_hemi: r_hemi };
                 }
             },
-
             calculateDisplacement: (ox, oy, x, width, params) => {
-                // "视觉" 模型的中心点是重叠的
                 const BUST_X_POS = width * 0.25; // x/2
                 const leftCenter = { x: -BUST_X_POS, y: BUST_Y_POS };
                 const rightCenter = { x: BUST_X_POS, y: BUST_Y_POS };
-                
                 const distLeft = Math.hypot(ox - leftCenter.x, oy - leftCenter.y);
                 const distRight = Math.hypot(ox - rightCenter.x, oy - rightCenter.y);
                 let zL = 0, zR = 0;
                 
-                if (params.y === 0) { // '球面被切'
+                if (params.y === 0) {
                     const { r_A, h, r_hemi } = params;
                     if (distLeft < r_hemi) zL = Math.sqrt(r_A*r_A - distLeft*distLeft) - r_A + h;
                     if (distRight < r_hemi) zR = Math.sqrt(r_A*r_A - distRight*distRight) - r_A + h;
-                } else { // '圆柱+半球'
+                } else {
                     const { y, r_hemi } = params;
                     if (distLeft < r_hemi) zL = y + (Math.sqrt(r_hemi*r_hemi - distLeft*distLeft));
                     if (distRight < r_hemi) zR = y + (Math.sqrt(r_hemi*r_hemi - distRight*distRight));
@@ -132,46 +124,58 @@
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // █ █ █   2. 计算引擎 (CALCULATION_ENGINE)   █ █ █
-        // █ █ █   (v5 模型: c=x/4, 5x+...)         █ █ █
-        // █ █ █   只负责您 "读到" 的 UI 数字         █ █ █
+        // █ █ █   (v5 模型: c=x/4, 5x+...) - 只负责 "算" █ █ █
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         const CALCULATION_ENGINE = {
-
             getShapeParams: (shapeValue, x) => {
                 const r_hemi = x / 4; // "计算" 模型的底座半径
                 if (shapeValue < PIECEWISE_THRESHOLD) {
-                    // --- 方案A: "球面被切" (c=x/4) ---
                     const shapeNorm = shapeValue / PIECEWISE_THRESHOLD;
-                    const r_max = x * 100; 
-                    const r_min = r_hemi + 0.001; 
+                    const r_max = x * 100, r_min = r_hemi + 0.001; 
                     const r_A = r_max * Math.pow(r_min / r_max, shapeNorm);
-                    return { r_A: r_A, y: 0, r_hemi: r_hemi };
+                    return { r_A: r_A, y: 0, r_hemi: r_hemi }; // y=0
                 } else {
-                    // --- 方案B: "圆柱+半球" (c=x/4) ---
                     const shapeNorm = (shapeValue - PIECEWISE_THRESHOLD) / (100 - PIECEWISE_THRESHOLD);
-                    const y = shapeNorm * (x * 1.5); // y_max
-                    return { r_A: r_hemi, y: y, r_hemi: r_hemi };
+                    const y = shapeNorm * (x * 1.5); 
+                    return { r_A: r_hemi, y: y, r_hemi: r_hemi }; // y>0, r_A=r_hemi
                 }
             },
-
             calculateBustCircumference: (params, x) => {
                 if (params.y === 0) { // '球面被切'
                     const { r_A, r_hemi } = params; // r_hemi = x/4
-                    // 您的公式 (A): 5x + 2 * (弧长)
                     const arcLength = 2 * r_A * Math.asin( r_hemi / r_A );
                     return (5 * x) + (2 * arcLength);
                 } else { // '圆柱+半球'
                     const { y } = params;
-                    // 您的公式 (B): 5x + 2y + PI*x/2
                     return (5 * x) + (2 * y) + (PI * x / 2);
                 }
             }
         };
+
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // █ █ █   (引擎 结束)   █ █ █
+        // █ █ █   3. 求解器 (SOLVER)   █ █ █
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const SOLVER = {
+            findShapeForCirc: (targetCirc, x) => {
+                let minShape = 0;
+                let maxShape = 100;
+                let bestShape = 0;
+                for (let i = 0; i < 15; i++) {
+                    const midShape = (minShape + maxShape) / 2;
+                    bestShape = midShape;
+                    const params = CALCULATION_ENGINE.getShapeParams(midShape, x);
+                    const currentCirc = CALCULATION_ENGINE.calculateBustCircumference(params, x);
+                    if (currentCirc < targetCirc) {
+                        minShape = midShape;
+                    } else {
+                        maxShape = midShape;
+                    }
+                }
+                return bestShape;
+            }
+        };
         
-        // ... init() 函数, 与 v5 相同 ...
+        // ... (init() 函数保持不变) ...
         function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -207,32 +211,39 @@
             scene.add(torsoMesh);
 
             underbustSlider.addEventListener('input', updateModel);
-            bustShapeSlider.addEventListener('input', updateModel);
+            bustCircSlider.addEventListener('input', updateModel);
             
-            updateModel();
+            updateModel(); // 首次运行
             animate();
         }
 
-
         /**
          * 4. 统一的更新函数 (高性能)
-         * !! 关键改动: 同时调用两个引擎 !!
          */
         function updateModel() {
-            // 1. 读取输入
+            // --- 1. 读取输入: 下胸围 ---
             const underbust = parseFloat(underbustSlider.value);
-            const shapeValue = parseFloat(bustShapeSlider.value);
-            
-            // 2. 计算躯干尺寸
             const x = underbust / 6.0; 
-            const width = 2 * x;       
+            const width = 2 * x;
+
+            // --- 2. 约束上胸围滑块 ---
+            const minBust = 6 * x; // 您的 5x+... 公式在 shape=0 时的极限
+            bustCircSlider.min = minBust.toFixed(2); 
+
+            // --- 3. 读取输入: 上胸围 (并约束) ---
+            let targetBust = parseFloat(bustCircSlider.value);
+            if (targetBust < minBust) {
+                targetBust = minBust;
+                bustCircSlider.value = targetBust;
+            }
             
-            // 3. !! 核心 !! 
-            //    并行运行两个引擎
-            const visualParams = VISUAL_ENGINE.getShapeParams(shapeValue, x);
-            const mathParams = CALCULATION_ENGINE.getShapeParams(shapeValue, x);
+            // --- 4. 运行求解器 ---
+            const foundShape = SOLVER.findShapeForCirc(targetBust, x);
             
-            // 4. 应用 "视觉" 引擎到 3D 模型
+            // --- 5. 驱动视觉 (v6 c=x 模型) ---
+            const visualParams = VISUAL_ENGINE.getShapeParams(foundShape, x);
+            
+            // --- 6. 更新 3D 模型 (应用 "视觉") ---
             const positions = torsoGeo.attributes.position.array;
             for (let i = 0; i < positions.length; i += 3) {
                 const base_ox = originalPositions[i];
@@ -253,26 +264,27 @@
                 positions[i + 2] = oz + zOffset;
             }
 
-            // 5. 通知 Three.js 更新
+            // --- 7. 通知 Three.js 更新 ---
             torsoGeo.attributes.position.needsUpdate = true;
             torsoGeo.computeVertexNormals();
             torsoGeo.computeBoundingSphere(); 
 
-            // 6. 应用 "计算" 引擎到 UI 读数
-            const circumference = CALCULATION_ENGINE.calculateBustCircumference(mathParams, x);
+            // --- 8. !! JS 变更 !! 更新所有 UI 读数 ---
             
-            // 7. 更新所有 UI
-            document.getElementById('underbustValue').textContent = underbust;
-            document.getElementById('bustShapeValue').textContent = shapeValue;
+            // (获取 "计算" 引擎的参数用于显示)
+            const mathParams = CALCULATION_ENGINE.getShapeParams(foundShape, x);
+
+            document.getElementById('underbustValue').textContent = underbust.toFixed(0);
+            document.getElementById('bustCircValue').textContent = targetBust.toFixed(2);
             
-            // 这是您要的 "计算" 读数
-            document.getElementById('bustCircumferenceDisplay').textContent = circumference.toFixed(2);
+            // 调试 - 数学值
+            document.getElementById('xValue').textContent = x.toFixed(2);
+            document.getElementById('math_y').textContent = mathParams.y.toFixed(2);
+            document.getElementById('math_r_A').textContent = mathParams.r_A.toFixed(2);
             
-            // 这是 "视觉" 模型的调试信息
-            document.getElementById('modeValue').textContent = visualParams.mode;
-            document.getElementById('rValue').textContent = visualParams.r_A.toFixed(2);
-            document.getElementById('hValue').textContent = visualParams.h.toFixed(2);
-            document.getElementById('yValue').textContent = visualParams.y.toFixed(2);
+            // 调试 - 引擎状态
+            document.getElementById('shapeValue').textContent = foundShape.toFixed(2);
+            document.getElementById('modeValue').textContent = visualParams.mode; // (显示视觉模式)
         }
 
         function animate() {
