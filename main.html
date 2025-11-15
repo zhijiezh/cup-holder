@@ -34,6 +34,9 @@
 <body>
 
     <div id="controls">
+        <label for="themeSelector">主题风格:</label>
+        <select id="themeSelector" style="width: 100%; padding: 5px; margin-bottom: 15px;"></select>
+
         <label for="underbust">下胸围 (cm): <span id="underbustValue">84</span></label>
         <input type="range" id="underbust" min="30" max="200" value="84" step="1">
 
@@ -72,11 +75,123 @@
         // █   全局变量 & 状态管理
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         let scene, camera, renderer, controls;
-        let torsoMesh, leftBustMesh, rightBustMesh;
-        let torsoGeo, material;
-        let originalPositions; 
+        let meshes = {}; // 用一个对象来统一管理所有网格
+
+        // 主题和材质管理
+        const THEMES = {
+            spongebob: {
+                background: 0x87ceeb, // 天蓝色
+                type: 'standard',
+                structure: 'tri-part', // 三段式结构
+                proportions: { shirt: 0.1, pants: 0.2 },
+                body: { color: 0xffe44f, roughness: 0.8, metalness: 0.0 },
+                shirt: { color: 0xffffff, roughness: 0.9, metalness: 0.0 },
+                pants: { color: 0x966941, roughness: 0.9, metalness: 0.0 },
+                eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 },
+                pupil: { color: 0x000000, roughness: 0.0 },
+            },
+            classic: {
+                background: 0x2a2a2a, // 深灰色
+                type: 'standard',
+                structure: 'uni-body', // 一体式结构
+                proportions: { shirt: 0, pants: 0 },
+                body: { color: 0x008cff, roughness: 0.5, metalness: 0.1 }, // 蓝色身体
+                eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 }, // 改为白色眼球
+                pupil: { color: 0x000000, roughness: 0.1 }, // 改为黑色瞳仁
+            },
+            toon: {
+                background: 0xbde8ff, // 柔和天蓝
+                type: 'toon',
+                structure: 'tri-part', // 改为三段式
+                proportions: { shirt: 0.25, pants: 0.35 }, // 衬衫+裤子比例
+                body: { color: 0xffdab9 }, // 柔和肤色
+                shirt: { color: 0xffdab9 }, // 改为与身体相同的肤色，实现无衬衫效果
+                pants: { color: 0x4a6b96 }, // 牛仔蓝色
+                eye: { color: 0xffffff, roughness: 0.1 }, // 保持白色，但让它更光滑以区别于衬衫
+                pupil: { color: 0x222222 },
+            },
+            cyberpunk: {
+                background: 0x12081a, // 深紫色
+                type: 'standard',
+                structure: 'tri-part',
+                proportions: { shirt: 0.3, pants: 0.25 },
+                body: { color: 0x333333, roughness: 0.4, metalness: 0.8 },
+                shirt: { color: 0x222222, roughness: 0.5, metalness: 0.5, emissive: 0xff00ff, emissiveIntensity: 1.5 },
+                pants: { color: 0x181818, roughness: 0.8, metalness: 0.2, emissive: 0x00ffff, emissiveIntensity: 1.5 },
+                eye: { color: 0xffffff, emissive: 0xff00ff, roughness: 0.1, metalness: 0.1, emissiveIntensity: 2.5 },
+                pupil: { color: 0xff00ff, emissive: 0xff00ff, emissiveIntensity: 3.0 },
+            },
+            alien: {
+                background: 0x05020d, // 深空紫
+                type: 'standard',
+                structure: 'uni-body',
+                proportions: { shirt: 0, pants: 0 },
+                body: { color: 0x98fb98, roughness: 0.6, metalness: 0.1 }, // 浅绿色皮肤
+                eye: { color: 0x0a0a0a, roughness: 0.05, metalness: 1.0 }, // 乌黑发亮的眼睛
+                pupil: { color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 2.0 },
+            }
+        };
+
+        const MATERIALS = {}; // 存放实例化的材质
+
+        const THEME_MANAGER = {
+            currentThemeName: 'spongebob',
+
+            setTheme(themeName) {
+                this.currentThemeName = themeName;
+                const theme = THEMES[themeName] || THEMES.spongebob;
+                setupMaterials(theme);
+                setupLighting(theme);
+                scene.background = new THREE.Color(theme.background);
+
+                if (meshes.torsoTop) {
+                    this.applyMaterials();
+                    this.updateVisibility();
+                    updateApp();
+                }
+            },
+
+            updateAppearance(width, x) {
+                const theme = THEMES[this.currentThemeName];
+                if (theme.structure === 'tri-part') {
+                    const shirtHeight = TORSO_HEIGHT * theme.proportions.shirt;
+                    const pantsHeight = TORSO_HEIGHT * theme.proportions.pants;
+                    const topHeight = TORSO_HEIGHT - shirtHeight - pantsHeight;
+
+                    meshes.torsoTop.scale.set(width, topHeight, x);
+                    meshes.torsoTop.position.y = (shirtHeight + pantsHeight) / 2;
+
+                    meshes.torsoShirt.scale.set(width, shirtHeight, x);
+                    meshes.torsoShirt.position.y = (pantsHeight - topHeight) / 2;
+
+                    meshes.torsoPants.scale.set(width, pantsHeight, x);
+                    meshes.torsoPants.position.y = (-topHeight - shirtHeight) / 2;
+                } else { 
+                    meshes.torsoTop.scale.set(width, TORSO_HEIGHT, x);
+                    meshes.torsoTop.position.y = 0;
+
+                    meshes.torsoShirt.scale.set(0, 0, 0);
+                    meshes.torsoPants.scale.set(0, 0, 0);
+                }
+            },
+            applyMaterials() {
+                meshes.torsoTop.material = MATERIALS.body;
+                meshes.torsoShirt.material = MATERIALS.shirt;
+                meshes.torsoPants.material = MATERIALS.pants;
+                meshes.leftEyeball.material = meshes.rightEyeball.material = MATERIALS.eye; // 注意: Eyeball 和 Pupil 的材质是分开的
+                meshes.leftPupil.material = meshes.rightPupil.material = MATERIALS.pupil;
+            },
+            updateVisibility() {
+                const theme = THEMES[this.currentThemeName];
+                const isTriPart = theme.structure === 'tri-part';
+
+                meshes.torsoShirt.visible = isTriPart;
+                meshes.torsoPants.visible = isTriPart;
+            }
+        };
 
         const DOM = {
+            themeSelector: document.getElementById('themeSelector'),
             underbustSlider: document.getElementById('underbust'),
             bustCircSlider: document.getElementById('bustCirc'),
             underbustValue: document.getElementById('underbustValue'),
@@ -97,14 +212,14 @@
 
         // 应用状态
         const APP_STATE = {
-            underbust: 68,
-            targetBust: 88,
+            underbust: 84,
+            targetBust: 95.99,
             foundShape: 0,
         };
 
         
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // █ █ █   1. 统一的几何引擎 (GEOMETRY_ENGINE)   █ █ █
+        // █   1. 统一的几何引擎 (GEOMETRY_ENGINE)
         // █ █ █   (v10 模型: c=x, r_hemi=x/2, 5x+...)  █ █ █
         // █ █ █   视觉 和 数学 100% 统一            █ █ █
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -161,7 +276,7 @@
         };
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // █ █ █   2. 求解器 (SOLVER)   █ █ █
+        // █   2. 求解器 (SOLVER)
         // █ █ █   (与 v9 相同, 但现在调用统一的引擎) █ █ █
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         const SOLVER = {
@@ -228,7 +343,7 @@
             // 获取统一参数
             const params = GEOMETRY_ENGINE.getShapeParams(APP_STATE.foundShape, x);
 
-            // --- 更新胸部几何体 ---
+            // --- 更新眼睛几何体 (眼球+瞳仁) ---
             const BUST_X_POS = width * 0.25;
             let bustGeo;
 
@@ -263,28 +378,31 @@
                 bustGeo.translate(0, 0, -(r_A - h)); // 将球帽的"底面"移动到 Z=0 平面
             }
 
-            // 统一更新胸部 Mesh
-            leftBustMesh.geometry.dispose();
-            rightBustMesh.geometry.dispose();
-            leftBustMesh.geometry = bustGeo;
-            rightBustMesh.geometry = bustGeo.clone();
-            leftBustMesh.position.set(-BUST_X_POS, BUST_Y_POS, halfDepth);
-            rightBustMesh.position.set(BUST_X_POS, BUST_Y_POS, halfDepth);
+            // 更新眼球
+            meshes.leftEyeball.geometry.dispose();
+            meshes.rightEyeball.geometry.dispose();
+            meshes.leftEyeball.geometry = bustGeo;
+            meshes.rightEyeball.geometry = bustGeo.clone();
 
-            // --- 更新躯干模型 (简单的长方体) ---
-            const positions = torsoGeo.attributes.position.array;
-            for (let i = 0; i < positions.length; i += 3) {
-                const base_ox = originalPositions[i];
-                const base_oy = originalPositions[i + 1];
-                const base_oz = originalPositions[i + 2];
+            // 更新瞳仁 (平面)
+            const pupilRadius = params.r_hemi * 0.4;
+            const pupilGeo = new THREE.CircleGeometry(pupilRadius, 16);
+            meshes.leftPupil.geometry.dispose();
+            meshes.rightPupil.geometry.dispose();
+            meshes.leftPupil.geometry = pupilGeo; // 左瞳仁
+            meshes.rightPupil.geometry = pupilGeo.clone(); // 右瞳仁
+            
+            // 定位瞳仁在眼球表面
+            const pupilZOffset = params.h + 0.1; // 稍微向前偏移以防止渲染冲突 (Z-fighting)
+            meshes.leftPupil.position.z = pupilZOffset;
+            meshes.rightPupil.position.z = pupilZOffset;
 
-                positions[i] = base_ox * width;
-                positions[i + 1] = base_oy * TORSO_HEIGHT;
-                positions[i + 2] = base_oz * x;
-            }
+            // --- 更新躯干外观 (委托给主题管理器) ---
+            THEME_MANAGER.updateAppearance(width, x);
 
-            torsoGeo.attributes.position.needsUpdate = true;
-            torsoMesh.geometry.computeVertexNormals();
+            // 定位整个眼睛 Group
+            meshes.leftEyeGroup.position.set(-BUST_X_POS, BUST_Y_POS, halfDepth);
+            meshes.rightEyeGroup.position.set(BUST_X_POS, BUST_Y_POS, halfDepth); // 修复: 右眼应该在正X轴
 
             return params; // 将参数传出给UI更新函数
         }
@@ -315,33 +433,79 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            const ambient = new THREE.AmbientLight(0x404040, 2);
-            const light = new THREE.DirectionalLight(0xffffff, 2);
-            light.position.set(10, 30, 50);
-            scene.add(ambient, light);
-
             controls = new OrbitControls(camera, renderer.domElement);
             controls.target.set(0, BUST_Y_POS, 0);
         }
 
+        function setupLighting(theme) {
+            // 清理旧灯光
+            scene.children.filter(obj => obj.isLight).forEach(light => scene.remove(light));
+
+            if (theme.type === 'toon') {
+                const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2.5);
+                light.position.set(0, 100, 0);
+                scene.add(light);
+            } else {
+                const ambient = new THREE.AmbientLight(0x404040, 2);
+                const light = new THREE.DirectionalLight(0xffffff, 2);
+                light.position.set(10, 30, 50);
+                scene.add(ambient, light);
+            }
+        }
+
+        function setupMaterials(theme) {
+            const MaterialClass = theme.type === 'toon' ? THREE.MeshToonMaterial : THREE.MeshStandardMaterial;
+
+            for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil']) {
+                if (theme[key]) {
+                    const props = { ...theme[key] };
+                    // 关键修复: 瞳仁是平面，需要渲染双面
+                    if (key === 'pupil') props.side = THREE.DoubleSide;
+                    MATERIALS[key] = new MaterialClass(props);
+                }
+            }
+        }
+
         function setupGeometry() {
-            material = new THREE.MeshStandardMaterial({
-                color: 0x008cff,
-                roughness: 0.5,
-                wireframe: false 
-            });
+            const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+            meshes.torsoTop = new THREE.Mesh(boxGeo, MATERIALS.body);
+            meshes.torsoShirt = new THREE.Mesh(boxGeo, MATERIALS.shirt);
+            meshes.torsoPants = new THREE.Mesh(boxGeo, MATERIALS.pants);
 
-            torsoGeo = new THREE.BoxGeometry(1, 1, 1, SEGMENTS_W, SEGMENTS_H, SEGMENTS_D);
-            originalPositions = torsoGeo.attributes.position.array.slice();
-            torsoMesh = new THREE.Mesh(torsoGeo, material);
+            THEME_MANAGER.updateVisibility();
 
-            leftBustMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
-            rightBustMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+            // 创建眼睛 (眼球+瞳仁的组合)
+            meshes.leftEyeGroup = new THREE.Group();
+            meshes.rightEyeGroup = new THREE.Group();
 
-            scene.add(torsoMesh, leftBustMesh, rightBustMesh);
+            meshes.leftEyeball = new THREE.Mesh(new THREE.BufferGeometry(), MATERIALS.eye);
+            meshes.rightEyeball = new THREE.Mesh(new THREE.BufferGeometry(), MATERIALS.eye);
+            meshes.leftPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), MATERIALS.pupil);
+            meshes.rightPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), MATERIALS.pupil);
+
+            meshes.leftEyeGroup.add(meshes.leftEyeball, meshes.leftPupil);
+            meshes.rightEyeGroup.add(meshes.rightEyeball, meshes.rightPupil);
+
+            scene.add(
+                meshes.torsoTop, meshes.torsoShirt, meshes.torsoPants,
+                meshes.leftEyeGroup, meshes.rightEyeGroup
+            );
         }
 
         function setupEventListeners() {
+            const themeSelector = DOM.themeSelector;
+            for (const themeName in THEMES) {
+                const option = document.createElement('option');
+                option.value = themeName;
+                option.textContent = themeName.charAt(0).toUpperCase() + themeName.slice(1);
+                themeSelector.appendChild(option);
+            }
+            themeSelector.value = THEME_MANAGER.currentThemeName;
+
+            themeSelector.addEventListener('change', (event) => {
+                THEME_MANAGER.setTheme(event.target.value);
+            });
+
             DOM.underbustSlider.addEventListener('input', updateApp);
             DOM.bustCircSlider.addEventListener('input', updateApp);
             window.addEventListener('resize', () => {
@@ -359,9 +523,10 @@
 
         function init() {
             setupScene();
+            THEME_MANAGER.setTheme('spongebob'); // 设置初始主题
             setupGeometry();
             setupEventListeners();
-            updateApp(); // 首次运行
+            updateApp(); // 关键修复: 在所有设置完成后，手动调用一次，以确保初始状态正确
             animate();
         }
 
