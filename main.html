@@ -35,10 +35,10 @@
 
     <div id="controls">
         <label for="underbust">下胸围 (cm): <span id="underbustValue">84</span></label>
-        <input type="range" id="underbust" min="60" max="120" value="84" step="1">
+        <input type="range" id="underbust" min="30" max="200" value="84" step="1">
 
         <label for="bustCirc">上胸围 (cm): <span id="bustCircValue">95.99</span></label>
-        <input type="range" id="bustCirc" min="84" max="160" value="95.99" step="0.01">
+        <input type="range" id="bustCirc" min="84" max="284" value="95.99" step="0.01">
 
         <div id="readouts">
             <div id="debug-readout">
@@ -56,8 +56,9 @@
     <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.skypack.dev/three@0.128.0/build/three.module.js",
-        "three/controls/": "https://cdn.skypack.dev/three@0.128.0/examples/jsm/controls/"
+        "three": "https://cdn.skypack.dev/three@0.136.0/build/three.module.js",
+        "three/controls/": "https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/",
+        "three/utils/": "https://cdn.skypack.dev/three@0.136.0/examples/jsm/utils/"
       }
     }
     </script>
@@ -65,20 +66,41 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/controls/OrbitControls.js';
+        import { mergeBufferGeometries } from 'three/utils/BufferGeometryUtils.js';
 
-        let scene, camera, renderer, controls, material, torsoMesh, torsoGeo;
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // █   全局变量 & 状态管理
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        let scene, camera, renderer, controls;
+        let torsoMesh, leftBustMesh, rightBustMesh;
+        let torsoGeo, material;
         let originalPositions; 
 
-        // DOM 元素
-        const underbustSlider = document.getElementById('underbust');
-        const bustCircSlider = document.getElementById('bustCirc');
+        const DOM = {
+            underbustSlider: document.getElementById('underbust'),
+            bustCircSlider: document.getElementById('bustCirc'),
+            underbustValue: document.getElementById('underbustValue'),
+            bustCircValue: document.getElementById('bustCircValue'),
+            modeValue: document.getElementById('modeValue'),
+            xValue: document.getElementById('xValue'),
+            yValue: document.getElementById('yValue'),
+            r_AValue: document.getElementById('r_AValue'),
+            shapeValue: document.getElementById('shapeValue'),
+        };
 
         // 常量
         const TORSO_HEIGHT = 40; 
-        const SEGMENTS_W = 32, SEGMENTS_H = 48, SEGMENTS_D = 16; 
+        const SEGMENTS_W = 1, SEGMENTS_H = 1, SEGMENTS_D = 1; 
         const BUST_Y_POS = TORSO_HEIGHT * 0.25;
         const PIECEWISE_THRESHOLD = 50; 
         const PI = Math.PI;
+
+        // 应用状态
+        const APP_STATE = {
+            underbust: 68,
+            targetBust: 88,
+            foundShape: 0,
+        };
 
         
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -117,31 +139,6 @@
                         r_A: r_hemi, h: h, y: y, r_hemi: r_hemi 
                     };
                 }
-            },
-
-            /**
-             * 2. 顶点位移函数 (视觉)
-             * (这是 v6 "核心正确" 的视觉)
-             */
-            calculateDisplacement: (ox, oy, x, width, params) => {
-                const BUST_X_POS = width * 0.25; // x/2
-                const leftCenter = { x: -BUST_X_POS, y: BUST_Y_POS };
-                const rightCenter = { x: BUST_X_POS, y: BUST_Y_POS };
-                
-                const distLeft = Math.hypot(ox - leftCenter.x, oy - leftCenter.y);
-                const distRight = Math.hypot(ox - rightCenter.x, oy - rightCenter.y);
-                let zL = 0, zR = 0;
-                
-                if (params.y === 0) { // '球面被切'
-                    const { r_A, h, r_hemi } = params;
-                    if (distLeft < r_hemi) zL = Math.sqrt(r_A*r_A - distLeft*distLeft) - r_A + h;
-                    if (distRight < r_hemi) zR = Math.sqrt(r_A*r_A - distRight*distRight) - r_A + h;
-                } else { // '圆柱+半球'
-                    const { y, r_hemi } = params;
-                    if (distLeft < r_hemi) zL = y + (Math.sqrt(r_hemi*r_hemi - distLeft*distLeft));
-                    if (distRight < r_hemi) zR = y + (Math.sqrt(r_hemi*r_hemi - distRight*distRight));
-                }
-                return Math.max(zL, zR);
             },
 
             /**
@@ -190,8 +187,126 @@
             }
         };
         
-        // ... (init() 函数保持不变) ...
-        function init() {
+        /**
+         * 主更新函数，负责协调所有更新
+         */
+        function updateApp() {
+            updateStateFromUI();
+            const params = updateGeometries();
+            updateUIDisplay(params);
+        }
+
+        /**
+         * 从UI滑块读取输入并更新应用状态
+         */
+        function updateStateFromUI() {
+            APP_STATE.underbust = parseFloat(DOM.underbustSlider.value);
+
+            // 约束上胸围滑块范围
+            const minBust = APP_STATE.underbust;
+            const maxBust = APP_STATE.underbust + 200;
+            DOM.bustCircSlider.min = minBust.toFixed(2);
+            DOM.bustCircSlider.max = maxBust.toFixed(2);
+
+            // 读取并约束上胸围值
+            let targetBust = parseFloat(DOM.bustCircSlider.value);
+            APP_STATE.targetBust = Math.max(minBust, Math.min(targetBust, maxBust));
+
+            // 运行求解器
+            const x = APP_STATE.underbust / 6.0;
+            APP_STATE.foundShape = SOLVER.findShapeForCirc(APP_STATE.targetBust, x);
+        }
+
+        /**
+         * 根据当前状态更新所有3D几何体
+         */
+        function updateGeometries() {
+            const x = APP_STATE.underbust / 6.0;
+            const width = 2 * x;
+            const halfDepth = x / 2;
+
+            // 获取统一参数
+            const params = GEOMETRY_ENGINE.getShapeParams(APP_STATE.foundShape, x);
+
+            // --- 更新胸部几何体 ---
+            const BUST_X_POS = width * 0.25;
+            let bustGeo;
+
+            if (params.mode === '圆柱 (c=x)') {
+                // --- 大胸模式: 使用独立的几何体 ---
+                const { y, r_hemi } = params;
+
+                // a. 创建圆柱和半球
+                const cylinderGeo = new THREE.CylinderGeometry(r_hemi, r_hemi, y, 32);
+                const sphereGeo = new THREE.SphereGeometry(r_hemi, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+                
+                // b. 定位并合并
+                cylinderGeo.translate(0, y / 2, 0);
+                sphereGeo.translate(0, y, 0);
+                bustGeo = mergeBufferGeometries([cylinderGeo, sphereGeo]);
+                
+                // c. 旋转使其朝向前方 (Z轴)
+                bustGeo.rotateX(Math.PI / 2);
+
+            } else {
+                // 小胸模式: 使用球帽几何体
+                const { r_A, r_hemi, h } = params;
+                
+                // 计算球帽的角度
+                const thetaLength = Math.asin(r_hemi / r_A);
+
+                // b. 创建球帽几何体
+                bustGeo = new THREE.SphereGeometry(r_A, 32, 16, 0, Math.PI * 2, 0, thetaLength);
+                
+                // c. 旋转并定位，使其底部与身体表面对齐
+                bustGeo.rotateX(Math.PI / 2); // 使其朝向前方 (Z轴)
+                bustGeo.translate(0, 0, -(r_A - h)); // 将球帽的"底面"移动到 Z=0 平面
+            }
+
+            // 统一更新胸部 Mesh
+            leftBustMesh.geometry.dispose();
+            rightBustMesh.geometry.dispose();
+            leftBustMesh.geometry = bustGeo;
+            rightBustMesh.geometry = bustGeo.clone();
+            leftBustMesh.position.set(-BUST_X_POS, BUST_Y_POS, halfDepth);
+            rightBustMesh.position.set(BUST_X_POS, BUST_Y_POS, halfDepth);
+
+            // --- 更新躯干模型 (简单的长方体) ---
+            const positions = torsoGeo.attributes.position.array;
+            for (let i = 0; i < positions.length; i += 3) {
+                const base_ox = originalPositions[i];
+                const base_oy = originalPositions[i + 1];
+                const base_oz = originalPositions[i + 2];
+
+                positions[i] = base_ox * width;
+                positions[i + 1] = base_oy * TORSO_HEIGHT;
+                positions[i + 2] = base_oz * x;
+            }
+
+            torsoGeo.attributes.position.needsUpdate = true;
+            torsoMesh.geometry.computeVertexNormals();
+
+            return params; // 将参数传出给UI更新函数
+        }
+
+        /**
+         * 根据计算结果更新页面上的所有文本读数
+         */
+        function updateUIDisplay(params) {
+            DOM.underbustValue.textContent = APP_STATE.underbust.toFixed(0);
+            DOM.bustCircValue.textContent = APP_STATE.targetBust.toFixed(2);
+            
+            DOM.modeValue.textContent = params.mode;
+            DOM.xValue.textContent = (APP_STATE.underbust / 6.0).toFixed(2);
+            DOM.yValue.textContent = params.y.toFixed(2);
+            DOM.r_AValue.textContent = params.r_A.toFixed(2);
+            DOM.shapeValue.textContent = APP_STATE.foundShape.toFixed(2);
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // █   初始化 & 渲染循环
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        function setupScene() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, TORSO_HEIGHT * 0.5, 40);
@@ -201,143 +316,55 @@
             document.body.appendChild(renderer.domElement);
 
             const ambient = new THREE.AmbientLight(0x404040, 2);
-            scene.add(ambient);
             const light = new THREE.DirectionalLight(0xffffff, 2);
             light.position.set(10, 30, 50);
-            scene.add(light);
+            scene.add(ambient, light);
 
             controls = new OrbitControls(camera, renderer.domElement);
             controls.target.set(0, BUST_Y_POS, 0);
-            controls.update();
+        }
 
+        function setupGeometry() {
             material = new THREE.MeshStandardMaterial({
                 color: 0x008cff,
                 roughness: 0.5,
                 wireframe: false 
             });
 
-            torsoGeo = new THREE.BoxGeometry(
-                1, 1, 1, 
-                SEGMENTS_W, SEGMENTS_H, SEGMENTS_D
-            );
+            torsoGeo = new THREE.BoxGeometry(1, 1, 1, SEGMENTS_W, SEGMENTS_H, SEGMENTS_D);
             originalPositions = torsoGeo.attributes.position.array.slice();
-
             torsoMesh = new THREE.Mesh(torsoGeo, material);
-            scene.add(torsoMesh);
 
-            underbustSlider.addEventListener('input', updateModel);
-            bustCircSlider.addEventListener('input', updateModel);
-            
-            updateModel(); // 首次运行
-            animate();
+            leftBustMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+            rightBustMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+
+            scene.add(torsoMesh, leftBustMesh, rightBustMesh);
         }
 
-
-        /**
-         * 4. 统一的更新函数 (高性能)
-         * !! 关键改动: 统一引擎 !!
-         */
-        function updateModel() {
-            // --- 1. 读取输入: 下胸围 ---
-            const underbust = parseFloat(underbustSlider.value);
-            const x = underbust / 6.0; 
-            const width = 2 * x;
-
-            // --- 2. 约束上胸围滑块 ---
-            // 极限 (shape=0) 必须用引擎计算 (lim(r->inf) 2*r*asin(x/2r) = x)
-            // (5x + x = 6x)
-            const params_0 = GEOMETRY_ENGINE.getShapeParams(0, x);
-            const minBust = GEOMETRY_ENGINE.calculateBustCircumference(params_0, x);
-            bustCircSlider.min = minBust.toFixed(2); 
-
-            // (计算最大值)
-            const params_100 = GEOMETRY_ENGINE.getShapeParams(100, x);
-            const maxBust = GEOMETRY_ENGINE.calculateBustCircumference(params_100, x);
-            bustCircSlider.max = maxBust.toFixed(2);
-
-            // --- 3. 读取输入: 上胸围 (并约束) ---
-            let targetBust = parseFloat(bustCircSlider.value);
-            if (targetBust < minBust) targetBust = minBust;
-            if (targetBust > maxBust) targetBust = maxBust;
-            
-            // --- 4. 运行求解器 ---
-            const foundShape = SOLVER.findShapeForCirc(targetBust, x);
-            
-            // --- 5. !! 核心: 统一驱动 !! ---
-            // 用求解出的 shape, 获取 统一的 参数
-            const params = GEOMETRY_ENGINE.getShapeParams(foundShape, x);
-            
-            // --- 6. 更新 3D 模型 (应用 "统一" 参数) ---
-            const positions = torsoGeo.attributes.position.array;
-            const cornerRadius = x * 0.15; // 圆角半径，设置为一个较小的值
-            const halfWidth = width / 2;
-            const halfDepth = x / 2;
-
-            for (let i = 0; i < positions.length; i += 3) {
-                const base_ox = originalPositions[i];
-                const base_oy = originalPositions[i + 1];
-                const base_oz = originalPositions[i + 2];
-
-                let ox = base_ox * width;
-                const oy = base_oy * TORSO_HEIGHT;
-                let oz = base_oz * x;
-                
-                const original_ox_for_bust = ox; // 为计算胸部形状，保留原始ox
-
-                // --- 圆角逻辑开始 ---
-                // 只处理长方体在XZ平面的四个垂直角
-                if (Math.abs(ox) > halfWidth - cornerRadius && Math.abs(oz) > halfDepth - cornerRadius) {
-                    const cornerCenterX = Math.sign(ox) * (halfWidth - cornerRadius);
-                    const cornerCenterZ = Math.sign(oz) * (halfDepth - cornerRadius);
-                    
-                    const vecX = ox - cornerCenterX;
-                    const vecZ = oz - cornerCenterZ;
-                    const len = Math.hypot(vecX, vecZ);
-
-                    if (len > 0) {
-                        // 将顶点拉到圆角弧线上
-                        ox = cornerCenterX + (vecX / len) * cornerRadius;
-                        oz = cornerCenterZ + (vecZ / len) * cornerRadius;
-                    }
-                }
-                // --- 圆角逻辑结束 ---
-
-                let zOffset = 0;
-                // 只在身体正面应用胸部突起
-                if (base_oz > 0.499) { 
-                    // 使用原始的ox坐标来计算位移，以保证胸部形状不受圆角影响
-                    zOffset = GEOMETRY_ENGINE.calculateDisplacement(original_ox_for_bust, oy, x, width, params);
-                }
-                
-                positions[i] = ox;
-                positions[i + 1] = oy;
-                positions[i + 2] = oz + zOffset;
-            }
-
-            // --- 7. 通知 Three.js 更新 ---
-            torsoGeo.attributes.position.needsUpdate = true;
-            torsoGeo.computeVertexNormals();
-            torsoGeo.computeBoundingSphere(); 
-
-            // --- 8. 更新所有 UI 读数 ---
-            document.getElementById('underbustValue').textContent = underbust.toFixed(0);
-            document.getElementById('bustCircValue').textContent = targetBust.toFixed(2);
-            
-            // 调试 - 数学值
-            document.getElementById('modeValue').textContent = params.mode;
-            document.getElementById('xValue').textContent = x.toFixed(2);
-            document.getElementById('yValue').textContent = params.y.toFixed(2);
-            document.getElementById('r_AValue').textContent = params.r_A.toFixed(2);
-            document.getElementById('shapeValue').textContent = foundShape.toFixed(2);
+        function setupEventListeners() {
+            DOM.underbustSlider.addEventListener('input', updateApp);
+            DOM.bustCircSlider.addEventListener('input', updateApp);
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
         }
-
+        
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
             renderer.render(scene, camera);
         }
 
-        // --- 启动 ---
+        function init() {
+            setupScene();
+            setupGeometry();
+            setupEventListeners();
+            updateApp(); // 首次运行
+            animate();
+        }
+
         init();
     </script>
 </body>
