@@ -87,6 +87,7 @@
                 pants: { color: 0x966941, roughness: 0.9, metalness: 0.0 },
                 eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 },
                 pupil: { color: 0x000000, roughness: 0.0 },
+                eyebrow: { color: 0x000000, roughness: 0.8, angle: 0 }, // 中性眉毛
             },
             classic: {
                 background: 0x2a2a2a, // 深灰色
@@ -96,6 +97,7 @@
                 body: { color: 0x008cff, roughness: 0.5, metalness: 0.1 }, // 蓝色身体
                 eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 }, // 改为白色眼球
                 pupil: { color: 0x000000, roughness: 0.1 }, // 改为黑色瞳仁
+                eyebrow: { color: 0xcccccc, roughness: 0.8, angle: -0.15 }, // 轻微倒八字
             },
             toon: {
                 background: 0xbde8ff, // 柔和天蓝
@@ -107,6 +109,7 @@
                 pants: { color: 0x4a6b96 }, // 牛仔蓝色
                 eye: { color: 0xffffff, roughness: 0.1 }, // 保持白色，但让它更光滑以区别于衬衫
                 pupil: { color: 0x222222 },
+                eyebrow: { color: 0x5c4033, angle: 0.2 }, // 八字眉
             },
             cyberpunk: {
                 background: 0x12081a, // 深紫色
@@ -118,6 +121,7 @@
                 pants: { color: 0x181818, roughness: 0.8, metalness: 0.2, emissive: 0x00ffff, emissiveIntensity: 1.5 },
                 eye: { color: 0xffffff, emissive: 0xff00ff, roughness: 0.1, metalness: 0.1, emissiveIntensity: 2.5 },
                 pupil: { color: 0xff00ff, emissive: 0xff00ff, emissiveIntensity: 3.0 },
+                eyebrow: { color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 1.0, angle: -0.25 }, // 愤怒的倒八字
             },
             alien: {
                 background: 0x05020d, // 深空紫
@@ -127,6 +131,7 @@
                 body: { color: 0x98fb98, roughness: 0.6, metalness: 0.1 }, // 浅绿色皮肤
                 eye: { color: 0x0a0a0a, roughness: 0.05, metalness: 1.0 }, // 乌黑发亮的眼睛
                 pupil: { color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 2.0 },
+                eyebrow: { color: 0x32cd32, roughness: 0.8, angle: 0.3 }, // 好奇的八字眉
             }
         };
 
@@ -336,9 +341,13 @@
                 this.meshes.rightEyeball = new THREE.Mesh(new THREE.BufferGeometry(), this.materials.eye);
                 this.meshes.leftPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
                 this.meshes.rightPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
+                // 创建眉毛
+                this.meshes.leftEyebrow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.materials.eyebrow);
+                this.meshes.rightEyebrow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.materials.eyebrow);
 
-                this.meshes.leftEyeGroup.add(this.meshes.leftEyeball, this.meshes.leftPupil);
-                this.meshes.rightEyeGroup.add(this.meshes.rightEyeball, this.meshes.rightPupil);
+
+                this.meshes.leftEyeGroup.add(this.meshes.leftEyeball, this.meshes.leftPupil, this.meshes.leftEyebrow);
+                this.meshes.rightEyeGroup.add(this.meshes.rightEyeball, this.meshes.rightPupil, this.meshes.rightEyebrow);
 
                 this.scene.add(
                     this.meshes.torsoTop, this.meshes.torsoShirt, this.meshes.torsoPants,
@@ -392,6 +401,7 @@
 
                 this._updateEyeballGeometry(params);
                 this._updatePupilGeometry(params);
+                this._updateEyebrowGeometry(params);
                 this._updateTorsoAppearance(width, x);
 
                 const BUST_X_POS = width * 0.25;
@@ -442,6 +452,30 @@
             }
 
             /**
+             * 辅助函数：根据参数更新眉毛的大小和位置。
+             * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
+             */
+            _updateEyebrowGeometry(params) {
+                const eyebrowWidth = params.r_hemi * 1.8; // 眉毛宽度
+                const eyebrowHeight = eyebrowWidth * 0.25; // 眉毛高度
+                this.meshes.leftEyebrow.scale.set(eyebrowWidth, eyebrowHeight, 1);
+                this.meshes.rightEyebrow.scale.set(eyebrowWidth, eyebrowHeight, 1);
+
+                const eyebrowYOffset = params.r_hemi * 1.6; // 眉毛在眼睛上方的距离
+                this.meshes.leftEyebrow.position.y = eyebrowYOffset;
+                this.meshes.rightEyebrow.position.y = eyebrowYOffset;
+
+                // 关键修复1: 将眉毛向前移动，避免与身体重叠
+                this.meshes.leftEyebrow.position.z = 0.2;
+                this.meshes.rightEyebrow.position.z = 0.2;
+
+                // 关键修复2: 根据主题设置眉毛角度
+                const theme = THEMES[this.currentThemeName];
+                this.meshes.leftEyebrow.rotation.z = theme.eyebrow.angle || 0;
+                this.meshes.rightEyebrow.rotation.z = -(theme.eyebrow.angle || 0);
+            }
+
+            /**
              * 根据计算结果更新页面上所有的调试信息文本。
              * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
              */
@@ -462,7 +496,7 @@
              */
             _setupMaterials(theme) {
                 const MaterialClass = theme.type === 'toon' ? THREE.MeshToonMaterial : THREE.MeshStandardMaterial;
-                for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil']) {
+                for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil', 'eyebrow']) {
                     if (theme[key]) {
                         const props = { ...theme[key] };
                         if (key === 'pupil') props.side = THREE.DoubleSide;
@@ -496,6 +530,7 @@
                 this.meshes.torsoPants.material = this.materials.pants;
                 this.meshes.leftEyeball.material = this.meshes.rightEyeball.material = this.materials.eye;
                 this.meshes.leftPupil.material = this.meshes.rightPupil.material = this.materials.pupil;
+                this.meshes.leftEyebrow.material = this.meshes.rightEyebrow.material = this.materials.eyebrow;
             }
             /**
              * 根据主题结构（一体式或三段式），更新身体部件的可见性。
