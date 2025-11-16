@@ -538,9 +538,17 @@
 			'settings'
 			'main';
 			grid-template-columns: 1fr;
-			grid-template-rows: auto auto auto auto auto;
+			grid-template-rows: min-content min-content min-content min-content 1fr;
 			padding: 1rem;
 			gap: 0.5rem;
+		}
+
+		.app-container > *:not(.model-section) {
+			padding: 0.5rem 0;
+		}
+
+		.header {
+			padding-top: max(1rem, env(safe-area-inset-top, 44px));
 		}
 
 		.title {

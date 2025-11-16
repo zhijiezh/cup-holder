@@ -45,9 +45,11 @@
 			{/each}
 		</select>
 	</div>
-	<span class="brand-tag" class:hidden={!getBrand(value)}>
-		{getBrand(value) || '\u00A0'}
-	</span>
+	{#if getBrand(value)}
+		<span class="brand-tag">
+			{getBrand(value)}
+		</span>
+	{/if}
 </div>
 
 <style>
@@ -121,13 +123,7 @@
 		-webkit-backdrop-filter: blur(4px);
 		margin-top: 0.25rem;
 		align-self: flex-start;
-		min-height: 1.2em;
 		display: inline-block;
-	}
-
-	.brand-tag.hidden {
-		visibility: hidden;
-		opacity: 0;
 	}
 
 	.picker-wrapper:has(.picker.large) ~ .brand-tag {

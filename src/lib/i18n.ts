@@ -37,7 +37,7 @@ export const translations = {
 		dragHint: '上下拖动'
 	},
 	en: {
-		title: 'Your cup is',
+		title: 'Your bra size is',
 		underbust: 'Underbust',
 		bust: 'Bust',
 		cm: 'cm',
