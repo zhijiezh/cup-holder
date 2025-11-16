@@ -7,14 +7,14 @@ export const MEASUREMENT_RANGES = {
 	UNDERBUST_MIN: 30,
 	UNDERBUST_MAX: 200,
 	BUST_RANGE_OFFSET: 200, // 上胸围相对于下胸围的最大差值
-	UNDERBUST_DEFAULT: 80,
-	BUST_DEFAULT: 95
+	UNDERBUST_DEFAULT: 68,
+	BUST_DEFAULT: 88
 } as const;
 
 // 默认尺码（会根据地区动态调整）
 export const DEFAULT_SIZES = {
-	BAND: 75, // 中国默认 75，其他地区会在初始化时调整
-	CUP: 'C'
+	BAND: 70, // 中国默认 70，其他地区会在初始化时调整
+	CUP: 'E'
 } as const;
 
 // 罩杯选项（已废弃，现在通过 getCupOptions 动态生成）

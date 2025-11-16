@@ -49,7 +49,7 @@
 		MEASUREMENT_RANGES.UNDERBUST_MIN,
 		MEASUREMENT_RANGES.UNDERBUST_MAX
 	);
-	let selectedBand: number = 75; // 初始值，会在响应式中更新
+	let selectedBand: number = 70; // 初始值，会在响应式中更新
 	$: {
 		// 如果当前选中的 band 不在新地区的选项中，选择中间值
 		if (!bandOptions.includes(selectedBand)) {
