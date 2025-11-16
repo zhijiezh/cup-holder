@@ -24,7 +24,7 @@ export const DEFAULT_SIZES = {
 export const THEME_OPTIONS: string[] = ['spongebob', 'classic', 'toon', 'cyberpunk', 'alien'];
 
 // 地区选项
-export const REGION_OPTIONS: string[] = ['CN', 'US', 'JP', 'UK'];
+export const REGION_OPTIONS: string[] = ['CN', 'US', 'US_CLASSIC', 'JP', 'UK'];
 
 // 语言选项
 export const LANGUAGE_OPTIONS: string[] = ['zh', 'en'];

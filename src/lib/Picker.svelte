@@ -6,13 +6,15 @@
 		value = '',
 		label = '',
 		displayMap = {},
-		size = 'normal'
+		size = 'normal',
+		brandMap = {}
 	}: {
 		options?: string[] | number[];
 		value?: string | number;
 		label?: string;
 		displayMap?: Record<string | number, string>;
 		size?: 'large' | 'normal';
+		brandMap?: Record<string | number, string>;
 	} = $props();
 
 	const dispatch = createEventDispatcher();
@@ -26,17 +28,26 @@
 	function getDisplayValue(option: string | number): string {
 		return displayMap[option] || String(option);
 	}
+
+	function getBrand(option: string | number): string | undefined {
+		return brandMap[option];
+	}
 </script>
 
 <div class="picker-container">
 	{#if label}
 		<label class="picker-label">{label}</label>
 	{/if}
-	<select class="picker" class:large={size === 'large'} value={value} on:change={handleChange}>
-		{#each options as option}
-			<option value={option}>{getDisplayValue(option)}</option>
-		{/each}
-	</select>
+	<div class="picker-wrapper">
+		<select class="picker" class:large={size === 'large'} value={value} on:change={handleChange}>
+			{#each options as option}
+				<option value={option}>{getDisplayValue(option)}</option>
+			{/each}
+		</select>
+	</div>
+	<span class="brand-tag" class:hidden={!getBrand(value)}>
+		{getBrand(value) || '\u00A0'}
+	</span>
 </div>
 
 <style>
@@ -51,6 +62,12 @@
 		color: rgba(255, 255, 255, 0.7);
 		font-weight: 500;
 		margin-bottom: 0;
+	}
+
+	.picker-wrapper {
+		display: flex;
+		align-items: center;
+		position: relative;
 	}
 
 	.picker {
@@ -92,6 +109,33 @@
 		opacity: 0.9;
 	}
 
+	.brand-tag {
+		font-size: 0.65rem;
+		color: rgba(255, 255, 255, 0.5);
+		background: rgba(255, 255, 255, 0.1);
+		padding: 0.15rem 0.4rem;
+		border-radius: 0.25rem;
+		font-weight: 500;
+		white-space: nowrap;
+		backdrop-filter: blur(4px);
+		-webkit-backdrop-filter: blur(4px);
+		margin-top: 0.25rem;
+		align-self: flex-start;
+		min-height: 1.2em;
+		display: inline-block;
+	}
+
+	.brand-tag.hidden {
+		visibility: hidden;
+		opacity: 0;
+	}
+
+	.picker-wrapper:has(.picker.large) ~ .brand-tag {
+		font-size: 1rem;
+		padding: 0.25rem 0.6rem;
+		margin-top: 0.5rem;
+	}
+
 	/* 移动端优化 */
 	@media (max-width: 768px) {
 		.picker.large {
@@ -100,6 +144,14 @@
 
 		.picker-label {
 			font-size: 0.75rem;
+		}
+
+		.brand-tag {
+			font-size: 0.6rem;
+		}
+
+		.picker-wrapper:has(.picker.large) ~ .brand-tag {
+			font-size: 0.85rem;
 		}
 	}
 </style>

@@ -83,6 +83,11 @@ interface RegionConfig {
 	measurementToCupName: (difference: Measurement, cupNames: string[]) => string;
 	cupNameToMeasurement: (cup: string, cupNames: string[]) => Measurement;
 	
+	// Difference calculation: true = use band, false = use underbust
+	useBandForDifference: boolean;
+	
+	// Brand name for display (optional)
+	brand?: string;
 }
 
 const CN_CUP_NAMES = ['AA', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
@@ -128,32 +133,16 @@ function parseCupName(cup: string, baseArray: string[]): number {
 	return parseExtendedCupName(cup, baseArray);
 }
 
-function createInchBasedBandConverter() {
-	return {
-		bandToMeasurement: (band: number) => inch(band),
-		measurementToBand: (underbust: Measurement) => {
-			const underbustInch = Math.round(underbust.toInch());
-			const addInches = underbustInch % 2 === 0 ? 4 : 5;
-			return underbustInch + addInches;
-		}
-	};
-}
-
-function createCmBasedBandConverter(step: number) {
-	return {
-		bandToMeasurement: (band: number) => cm(band),
-		measurementToBand: (underbust: Measurement) => {
-			const underbustCm = underbust.toCm();
-			return Math.round(underbustCm / step) * step;
-		}
-	};
-}
 
 const REGION_CONFIGS: Record<Region, RegionConfig> = {
 	CN: {
 		bandStep: cm(5),
 		bandStart: 70,
-		...createCmBasedBandConverter(5),
+		bandToMeasurement: (band: number) => cm(band),
+		measurementToBand: (underbust: Measurement) => {
+			const underbustCm = underbust.toCm();
+			return Math.round(underbustCm / 5) * 5;
+		},
 		cupStep: cm(2.5),
 		firstCupThreshold: cm(7.5),
 		cupNames: CN_CUP_NAMES,
@@ -171,12 +160,19 @@ const REGION_CONFIGS: Record<Region, RegionConfig> = {
 				return cm(7.5);
 			}
 			return cm(10 + (index - 1) * 2.5);
-		}
+		},
+		useBandForDifference: false,
+		brand: 'Naitangpai'
 	},
 	US: {
 		bandStep: inch(2),
 		bandStart: 28,
-		...createInchBasedBandConverter(),
+		bandToMeasurement: (band: number) => inch(band),
+		measurementToBand: (underbust: Measurement) => {
+			// 现代算法：向上取整到最近的偶数
+			const underbustInch = underbust.toInch();
+			return Math.ceil(underbustInch / 2) * 2;
+		},
 		cupStep: inch(1),
 		firstCupThreshold: inch(-1),
 		cupNames: US_CUP_NAMES,
@@ -192,31 +188,78 @@ const REGION_CONFIGS: Record<Region, RegionConfig> = {
 			const index = parseCupName(cup, cupNames);
 			return inch(index - 1);
 		},
+		useBandForDifference: true,
+		brand: 'Victoria Secret'
 	},
-	JP: {
-		bandStep: cm(5),
-		bandStart: 65,
-		...createCmBasedBandConverter(5),
-		cupStep: cm(2.5),
-		firstCupThreshold: cm(5),
-		cupNames: JP_CUP_NAMES,
+	US_CLASSIC: {
+		bandStep: inch(2),
+		bandStart: 28,
+		bandToMeasurement: (band: number) => inch(band),
+		measurementToBand: (underbust: Measurement) => {
+			// 经典算法：+4 或 +5 然后取整
+			const underbustInch = Math.round(underbust.toInch());
+			const addInches = underbustInch % 2 === 0 ? 4 : 5;
+			return underbustInch + addInches;
+		},
+		cupStep: inch(1),
+		firstCupThreshold: inch(-1),
+		cupNames: US_CUP_NAMES,
 		measurementToCupName: (diff: Measurement, cupNames: string[]) => {
-			const diffCm = diff.toCm();
-			if (diffCm < 5) {
-				return 'AAA';
+			const diffInch = diff.toInch();
+			if (diffInch < -1) {
+				return 'AA';
 			}
-			const index = Math.floor((diffCm - 5) / 2.5);
+			const index = Math.max(0, Math.floor(diffInch + 1));
 			return generateCupName(index, cupNames);
 		},
 		cupNameToMeasurement: (cup: string, cupNames: string[]) => {
 			const index = parseCupName(cup, cupNames);
-			return cm(5 + index * 2.5);
-		}
+			return inch(index - 1);
+		},
+		useBandForDifference: true,
+		brand: 'Skims'
+	},
+	JP: {
+		bandStep: cm(5),
+		bandStart: 65,
+		bandToMeasurement: (band: number) => cm(band),
+		measurementToBand: (underbust: Measurement) => {
+			const underbustCm = underbust.toCm();
+			return Math.round(underbustCm / 5) * 5;
+		},
+		cupStep: cm(2.5),
+		firstCupThreshold: cm(6.5),
+		cupNames: JP_CUP_NAMES,
+		measurementToCupName: (diff: Measurement, cupNames: string[]) => {
+			const diffCm = diff.toCm();
+			// 根据WACOAL表格：AA从6.5开始，AAA < 6.5
+			if (diffCm < 6.5) {
+				return 'AAA';
+			}
+			// AA: 6.5-8.5 (中心7.5), A: 9.0-11.0 (中心10.0), 步长2.5
+			const index = Math.floor((diffCm - 6.5) / 2.5) + 1;
+			return generateCupName(index, cupNames);
+		},
+		cupNameToMeasurement: (cup: string, cupNames: string[]) => {
+			const index = parseCupName(cup, cupNames);
+			// AAA: 5.0 (假设), AA: 7.5, A: 10.0, B: 12.5...
+			if (index === 0) {
+				return cm(5.0); // AAA
+			}
+			return cm(6.5 + (index - 1) * 2.5);
+		},
+		useBandForDifference: false,
+		brand: 'WACOAL'
 	},
 	UK: {
 		bandStep: inch(2),
 		bandStart: 28,
-		...createInchBasedBandConverter(),
+		bandToMeasurement: (band: number) => inch(band),
+		measurementToBand: (underbust: Measurement) => {
+			// 现代算法：向上取整到最近的偶数
+			const underbustInch = underbust.toInch();
+			return Math.ceil(underbustInch / 2) * 2;
+		},
 		cupStep: inch(1),
 		firstCupThreshold: inch(-1),
 		cupNames: UK_CUP_NAMES,
@@ -231,7 +274,9 @@ const REGION_CONFIGS: Record<Region, RegionConfig> = {
 		cupNameToMeasurement: (cup: string, cupNames: string[]) => {
 			const index = parseCupName(cup, cupNames);
 			return inch(index - 1);
-		}
+		},
+		useBandForDifference: true,
+		brand: 'Curvy Kate'
 	}
 };
 
@@ -309,7 +354,8 @@ export function calculateBraSize(
 	const config = REGION_CONFIGS[region];
 	const band = underbustToBand(underbust, region);
 	const bandMeasurement = config.bandToMeasurement(band);
-	const difference = bust.subtract(bandMeasurement);
+	const baseMeasurement = config.useBandForDifference ? bandMeasurement : underbust;
+	const difference = bust.subtract(baseMeasurement);
 	const cup = calculateCup(difference, region);
 	return { band, cup };
 }
@@ -351,4 +397,8 @@ export function getBandOptions(region: Region, minUnderbust?: Measurement, maxUn
 	}
 	
 	return bands.sort((a, b) => a - b);
+}
+
+export function getRegionBrand(region: Region): string | undefined {
+	return REGION_CONFIGS[region].brand;
 }

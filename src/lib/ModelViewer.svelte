@@ -209,7 +209,12 @@
     camera = new THREE.PerspectiveCamera(CAMERA_FOV, aspect, 0.1, 1000);
     camera.position.set(CAMERA_POSITION.x, CAMERA_POSITION.y, CAMERA_POSITION.z);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      powerPreference: "high-performance",
+      failIfMajorPerformanceCaveat: false
+    });
     renderer.setSize(containerWidth, containerHeight);
     renderer.setClearColor(0x000000, 0); // 透明背景
     container.appendChild(renderer.domElement);
@@ -516,10 +521,42 @@
       isMounted = false;
       window.removeEventListener('resize', _onWindowResize);
       resizeObserver.disconnect();
+      
+      // 清理 Three.js 资源
       if (renderer) {
+        // 清理所有几何体和材质
+        scene?.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) {
+              if (Array.isArray(object.material)) {
+                object.material.forEach(m => m.dispose());
+              } else {
+                object.material.dispose();
+              }
+            }
+          }
+        });
+        
+        // 清理材质
+        Object.values(materials).forEach(material => {
+          if (material) material.dispose();
+        });
+        
+        // 清理渲染器
         renderer.dispose();
+        renderer.forceContextLoss();
       }
-      // any other cleanup
+      
+      // 清理场景
+      if (scene) {
+        scene.clear();
+      }
+      
+      // 清理控制器
+      if (controls) {
+        controls.dispose();
+      }
     }
   });
 </script>

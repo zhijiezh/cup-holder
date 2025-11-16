@@ -9,6 +9,7 @@
 		braSizeToMeasurements,
 		getBandOptions,
 		getCupOptions,
+		getRegionBrand,
 		cm,
 		type BraSize
 	} from '$lib/braSizeConverter';
@@ -68,6 +69,18 @@
 
 	// 动态生成 cup 选项（根据当前地区）
 	$: cupOptions = getCupOptions(region);
+
+	// 创建品牌映射
+	$: regionBrandMap = (() => {
+		const map: Record<string, string> = {};
+		for (const regionOption of REGION_OPTIONS) {
+			const brand = getRegionBrand(regionOption as Region);
+			if (brand) {
+				map[regionOption] = brand;
+			}
+		}
+		return map;
+	})();
 
 	/**
 	 * 单位转换函数
@@ -307,7 +320,7 @@
 			</div>
 		</div>
 
-	<!-- 设置区域（主题、地区、语言、单位） -->
+	<!-- 设置区域（主题、语言、单位、地区） -->
 	<div class="settings-section">
 		<Picker
 			options={THEME_OPTIONS}
@@ -315,13 +328,6 @@
 			label={t.theme}
 			displayMap={t.themes}
 			on:change={(e) => handleThemeChange(e)}
-		/>
-		<Picker
-			options={REGION_OPTIONS}
-			value={region}
-			label={t.region}
-			displayMap={t.regions}
-			on:change={(e) => handleRegionChange(e)}
 		/>
 		<Picker
 			options={LANGUAGE_OPTIONS}
@@ -336,6 +342,14 @@
 			label={t.unit}
 			displayMap={t.units}
 			on:change={(e) => handleUnitChange(e)}
+		/>
+		<Picker
+			options={REGION_OPTIONS}
+			value={region}
+			label={t.region}
+			displayMap={t.regions}
+			brandMap={regionBrandMap}
+			on:change={(e) => handleRegionChange(e)}
 		/>
 	</div>
 
