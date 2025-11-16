@@ -134,7 +134,6 @@
                 eyebrow: { color: 0x32cd32, roughness: 0.8, angle: 0.3 }, // 好奇的八字眉
             }
         };
-
         const DOM = {
             themeSelector: document.getElementById('themeSelector'),
             underbustSlider: document.getElementById('underbust'),
@@ -274,7 +273,7 @@
                 this.setTheme(this.currentThemeName, true); // isInitial=true
                 this._setupGeometry();
                 this._setupEventListeners();
-                this.updateApp(); // 根据初始滑块值，首次更新模型状态
+                this.updateApp();
                 this._animate();
             }
 
@@ -341,10 +340,13 @@
                 this.meshes.rightEyeball = new THREE.Mesh(new THREE.BufferGeometry(), this.materials.eye);
                 this.meshes.leftPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
                 this.meshes.rightPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
+                // 将 renderOrder 设置在 Mesh 上，而不是 Material
+                this.meshes.leftPupil.renderOrder = 1;
+                this.meshes.rightPupil.renderOrder = 1;
+
                 // 创建眉毛
                 this.meshes.leftEyebrow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.materials.eyebrow);
                 this.meshes.rightEyebrow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.materials.eyebrow);
-
 
                 this.meshes.leftEyeGroup.add(this.meshes.leftEyeball, this.meshes.leftPupil, this.meshes.leftEyebrow);
                 this.meshes.rightEyeGroup.add(this.meshes.rightEyeball, this.meshes.rightPupil, this.meshes.rightEyebrow);
@@ -405,8 +407,11 @@
                 this._updateTorsoAppearance(width, x);
 
                 const BUST_X_POS = width * 0.25;
-                this.meshes.leftEyeGroup.position.set(-BUST_X_POS, BUST_Y_POS, halfDepth);
-                this.meshes.rightEyeGroup.position.set(BUST_X_POS, BUST_Y_POS, halfDepth);
+                // 关键修复: 将整个眼睛组向前偏移一点，以解决眼球和身体的Z-fighting问题
+                const eyeGroupZOffset = halfDepth + 0.05; 
+
+                this.meshes.leftEyeGroup.position.set(-BUST_X_POS, BUST_Y_POS, eyeGroupZOffset);
+                this.meshes.rightEyeGroup.position.set(BUST_X_POS, BUST_Y_POS, eyeGroupZOffset);
 
                 return params;
             }
@@ -495,12 +500,27 @@
              * @param {Object} theme - 当前的主题对象。
              */
             _setupMaterials(theme) {
-                const MaterialClass = theme.type === 'toon' ? THREE.MeshToonMaterial : THREE.MeshStandardMaterial;
                 for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil', 'eyebrow']) {
                     if (theme[key]) {
-                        const props = { ...theme[key] };
-                        if (key === 'pupil') props.side = THREE.DoubleSide;
-                        this.materials[key] = new MaterialClass(props);
+                        // 1. 复制主题中的属性，并分离出非材质属性
+                        const { angle, ...materialProps } = { ...theme[key] };
+
+                        // 2. 根据主题类型选择材质类
+                        const isToon = theme.type === 'toon';
+                        const MaterialClass = isToon ? THREE.MeshToonMaterial : THREE.MeshStandardMaterial;
+
+                        // 3. 如果是Toon材质，移除不兼容的PBR属性
+                        if (isToon) {
+                            delete materialProps.roughness;
+                            delete materialProps.metalness;
+                        }
+
+                        // 4. 为瞳仁设置特殊渲染属性
+                        if (key === 'pupil') {
+                            materialProps.side = THREE.DoubleSide;
+                            materialProps.depthTest = false;
+                        }
+                        this.materials[key] = new MaterialClass(materialProps);
                     }
                 }
             }
@@ -584,7 +604,7 @@
         }
 
         // 启动应用
-        new ThreeApp();
+        const app = new ThreeApp();
     </script>
 </body>
 </html>
