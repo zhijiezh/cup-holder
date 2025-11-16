@@ -3,7 +3,7 @@
 	import ModelViewer from '$lib/ModelViewer.svelte';
 	import Picker from '$lib/Picker.svelte';
 	import NumberPicker from '$lib/NumberPicker.svelte';
-	import { getTranslation, type Language, type Region } from '$lib/i18n';
+	import { getTranslation, type Language, type Region, type Unit } from '$lib/i18n';
 	import {
 		calculateBraSize,
 		braSizeToMeasurements,
@@ -16,6 +16,7 @@
 		THEME_OPTIONS,
 		REGION_OPTIONS,
 		LANGUAGE_OPTIONS,
+		UNIT_OPTIONS,
 		DEFAULT_SETTINGS,
 		MODEL_UPDATE_DELAY,
 		THEME_CHANGE_DELAY
@@ -28,9 +29,10 @@
 	let language: Language = DEFAULT_SETTINGS.LANGUAGE;
 	let region: Region = DEFAULT_SETTINGS.REGION;
 	let currentTheme: string = DEFAULT_SETTINGS.THEME;
+	let unit: Unit = DEFAULT_SETTINGS.UNIT;
 	let modelViewer: ModelViewer;
 
-	// 测量值状态
+	// 测量值状态（内部始终使用 cm 存储）
 	let underbust: number = MEASUREMENT_RANGES.UNDERBUST_DEFAULT;
 	let bust: number = MEASUREMENT_RANGES.BUST_DEFAULT;
 	
@@ -61,6 +63,48 @@
 			return [60, 65, 70, 75, 80, 85, 90, 95, 100];
 		}
 	}
+
+	/**
+	 * 单位转换函数
+	 */
+	function inchToCm(inch: number): number {
+		return inch * 2.54;
+	}
+
+	function cmToInch(cm: number): number {
+		return cm / 2.54;
+	}
+
+	/**
+	 * 将值转换为显示单位
+	 */
+	function toDisplayUnit(value: number, targetUnit: Unit): number {
+		if (targetUnit === 'inch') {
+			// inch 显示为整数
+			return Math.round(cmToInch(value));
+		}
+		return value;
+	}
+
+	/**
+	 * 将显示单位的值转换为内部存储的 cm 值
+	 */
+	function fromDisplayUnit(value: number, sourceUnit: Unit): number {
+		if (sourceUnit === 'inch') {
+			return inchToCm(value);
+		}
+		return value;
+	}
+
+	// 计算显示值（根据当前单位）
+	$: underbustDisplay = toDisplayUnit(underbust, unit);
+	$: bustDisplay = toDisplayUnit(bust, unit);
+
+	// 计算显示范围（根据当前单位）
+	$: underbustMinDisplay = toDisplayUnit(MEASUREMENT_RANGES.UNDERBUST_MIN, unit);
+	$: underbustMaxDisplay = toDisplayUnit(MEASUREMENT_RANGES.UNDERBUST_MAX, unit);
+	$: bustMinDisplay = toDisplayUnit(bustMin, unit);
+	$: bustMaxDisplay = toDisplayUnit(bustMax, unit);
 
 	// ============================================================================
 	// 核心计算函数
@@ -127,7 +171,8 @@
 	 * 需要确保上胸围在有效范围内
 	 */
 	function handleUnderbustChange(event: CustomEvent<number>) {
-		underbust = event.detail;
+		// 将显示单位的值转换为 cm
+		underbust = fromDisplayUnit(event.detail, unit);
 		// 确保上胸围不会小于下胸围
 		if (bust < underbust) {
 			bust = underbust;
@@ -144,7 +189,8 @@
 	 * 处理上胸围测量值变化
 	 */
 	function handleBustChange(event: CustomEvent<number>) {
-		bust = event.detail;
+		// 将显示单位的值转换为 cm
+		bust = fromDisplayUnit(event.detail, unit);
 		calculateFromMeasurements();
 	}
 
@@ -175,6 +221,15 @@
 				modelViewer.setTheme(currentTheme);
 			}
 		}, THEME_CHANGE_DELAY);
+	}
+
+	/**
+	 * 处理单位变化
+	 * 单位变化时，保持内部 cm 值不变，只改变显示
+	 */
+	function handleUnitChange(event: CustomEvent<Unit>) {
+		unit = event.detail;
+		// 不需要重新计算，因为内部值已经是 cm
 	}
 
 	// ============================================================================
@@ -221,31 +276,31 @@
 		<div class="measurements">
 			<div class="measurement-item">
 				<NumberPicker
-					value={bust}
-					min={bustMin}
-					max={bustMax}
-					step={0.5}
+					value={bustDisplay}
+					min={bustMinDisplay}
+					max={bustMaxDisplay}
+					step={unit === 'inch' ? 1 : 0.5}
 					label={t.bust}
-					unit="cm"
+					unit={unit}
 					dragHint=""
 					on:change={(e) => handleBustChange(e)}
 				/>
 			</div>
 			<div class="measurement-item">
 				<NumberPicker
-					value={underbust}
-					min={MEASUREMENT_RANGES.UNDERBUST_MIN}
-					max={MEASUREMENT_RANGES.UNDERBUST_MAX}
-					step={1}
+					value={underbustDisplay}
+					min={underbustMinDisplay}
+					max={underbustMaxDisplay}
+					step={unit === 'inch' ? 1 : 1}
 					label={t.underbust}
-					unit="cm"
+					unit={unit}
 					dragHint=""
 					on:change={(e) => handleUnderbustChange(e)}
 				/>
 			</div>
 		</div>
 
-	<!-- 设置区域（主题、地区、语言） -->
+	<!-- 设置区域（主题、地区、语言、单位） -->
 	<div class="settings-section">
 		<Picker
 			options={THEME_OPTIONS}
@@ -267,6 +322,13 @@
 			label={t.language}
 			displayMap={t.languages}
 			on:change={(e) => handleLanguageChange(e)}
+		/>
+		<Picker
+			options={UNIT_OPTIONS}
+			value={unit}
+			label={t.unit}
+			displayMap={t.units}
+			on:change={(e) => handleUnitChange(e)}
 		/>
 	</div>
 

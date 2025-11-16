@@ -49,6 +49,16 @@
 	}
 
 	/**
+	 * 格式化显示值
+	 */
+	function formatValue(val: number): string {
+		if (unit === 'inch' || unit === 'cm') {
+			return val.toFixed(0);
+		}
+		return val.toFixed(2);
+	}
+
+	/**
 	 * 获取前一个值（用于显示）
 	 */
 	function getPrevValue(): number | null {
@@ -140,11 +150,11 @@
 			aria-valuemax={max}
 			aria-valuenow={value}
 		>
-			<div class="prev-value">{getPrevValue() !== null ? getPrevValue() : ''}</div>
+			<div class="prev-value">{getPrevValue() !== null ? formatValue(getPrevValue()!) : ''}</div>
 			<div class="current-value">
-				{value.toFixed(unit === 'cm' ? 0 : 2)}{unit}
+				{formatValue(value)} {unit}
 			</div>
-			<div class="next-value">{getNextValue() !== null ? getNextValue() : ''}</div>
+			<div class="next-value">{getNextValue() !== null ? formatValue(getNextValue()!) : ''}</div>
 		</div>
 	</div>
 </div>

@@ -29,11 +29,15 @@ export const REGION_OPTIONS: string[] = ['CN', 'US', 'JP'];
 // 语言选项
 export const LANGUAGE_OPTIONS: string[] = ['zh', 'en'];
 
+// 单位选项
+export const UNIT_OPTIONS: string[] = ['cm', 'inch'];
+
 // 默认设置
 export const DEFAULT_SETTINGS = {
 	THEME: 'spongebob' as const,
 	REGION: 'CN' as const,
-	LANGUAGE: 'zh' as const
+	LANGUAGE: 'zh' as const,
+	UNIT: 'cm' as const
 } as const;
 
 // 模型更新延迟（毫秒）
