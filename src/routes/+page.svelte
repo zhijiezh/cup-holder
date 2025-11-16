@@ -327,6 +327,11 @@
 		grid-area: header;
 		position: relative;
 		z-index: 2;
+		pointer-events: none; /* 不阻挡模型交互 */
+	}
+
+	.header :global(*) {
+		pointer-events: auto; /* 但文字本身可以选中 */
 	}
 
 	.title {
@@ -352,6 +357,11 @@
 		z-index: 2;
 		flex-wrap: nowrap;
 		overflow: hidden;
+		pointer-events: none; /* 不阻挡模型交互 */
+	}
+
+	.size-display :global(*) {
+		pointer-events: auto; /* 但选择器可以交互 */
 	}
 
 	.measurements {
@@ -361,6 +371,11 @@
 		gap: 0.75rem;
 		position: relative;
 		z-index: 2;
+		pointer-events: none; /* 不阻挡模型交互 */
+	}
+
+	.measurements :global(*) {
+		pointer-events: auto; /* 但输入控件可以交互 */
 	}
 
 	.measurement-item {
@@ -379,6 +394,11 @@
 		position: relative;
 		z-index: 2;
 		align-items: flex-start;
+		pointer-events: none; /* 不阻挡模型交互 */
+	}
+
+	.settings-section :global(*) {
+		pointer-events: auto; /* 但选择器可以交互 */
 	}
 
 	.model-section {
@@ -394,8 +414,8 @@
 		margin: 0;
 		padding: 0;
 		overflow: visible;
-		pointer-events: none;
-		z-index: 0;
+		pointer-events: none; /* 容器本身不阻挡，但canvas会 */
+		z-index: 1; /* 在背景上方，但在文字下方 */
 		/* 透明背景，让模型融入页面，像封面图 */
 	}
 
@@ -481,11 +501,12 @@
 		.model-section :global(div) {
 			position: absolute;
 			top: 66.67%;
-			left: 66.67%;
-			transform: translate(-50%, -50%);
-			width: 96vw !important;
+			left: 0;
+			right: 0;
+			transform: translateY(-50%);
+			width: 100vw !important;
 			height: 96vh !important;
-			min-width: 96vw;
+			min-width: 100vw;
 			min-height: 96vh;
 			margin: 0;
 			padding: 0;
@@ -499,6 +520,12 @@
 			padding: 0;
 			pointer-events: auto;
 			object-fit: cover;
+			/* 确保canvas延伸到屏幕边缘，消除左侧缝隙 */
+			position: absolute;
+			left: 0;
+			right: 0;
+			top: 0;
+			bottom: 0;
 		}
 	}
 </style>

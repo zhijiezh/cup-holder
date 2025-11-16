@@ -74,6 +74,7 @@
   let materials: { [key: string]: THREE.Material } = {};
   let currentThemeName = 'spongebob';
   let isMounted = false;
+  let modelGroup: THREE.Group;
   // appState 作为内部状态，可以通过组件实例访问
   let appState = $state({
     underbust: 84,
@@ -81,7 +82,9 @@
     foundShape: 0,
   });
 
-  // Constants
+  // ============================================================================
+  // 模型几何常量
+  // ============================================================================
   const TORSO_HEIGHT = 40;
   const BUST_Y_POS = TORSO_HEIGHT * 0.118;
   const PIECEWISE_THRESHOLD = 50;
@@ -92,6 +95,47 @@
   const EYEBROW_HEIGHT_FACTOR = 0.25;
   const EYEBROW_Y_OFFSET_FACTOR = 1.6;
   const EYEBROW_Z_OFFSET = 0.2;
+
+  // ============================================================================
+  // 模型组位置配置（可在此处微调模型整体位置）
+  // ============================================================================
+  const MODEL_GROUP_POSITION = {
+    x: 0,                    // 水平位置，正值=向右，负值=向左
+    y: 0,                     // 垂直位置，正值=向上，负值=向下
+    z: 0                      // 深度位置，正值=向前，负值=向后
+  };
+
+  // ============================================================================
+  // 相机位置和角度配置（可在此处微调模型视角）
+  // ============================================================================
+  // 相机位置：从右上方看模型，类似"男友看女友"的高度差
+  // - x: 右侧距离（正值=右侧，负值=左侧）
+  // - y: 高度（相对于模型中心）
+  // - z: 前方距离（正值=前方，负值=后方）
+  const CAMERA_POSITION = {
+    x: 40,                    // 右侧距离，增大=更靠右
+    y: TORSO_HEIGHT * 0.5 + 15, // 高度，增大=更高，减小=更低
+    z: 40                    // 前方距离，增大=更靠前
+  };
+
+  // 相机目标点偏移（相对于模型组位置的偏移）
+  // 可以设置相机看向模型旁边的某个点
+  const CAMERA_TARGET_OFFSET = {
+    x: -15,                     // 水平偏移，正值=向右偏移，负值=向左偏移
+    y: BUST_Y_POS,            // 垂直偏移（相对于模型组中心），正值=向上，负值=向下
+    z: 0                      // 深度偏移，正值=向前偏移，负值=向后偏移
+  };
+
+  // 相机目标点（相机看向的位置）
+  // 计算方式：模型组位置 + 偏移量
+  const CAMERA_TARGET = {
+    x: MODEL_GROUP_POSITION.x + CAMERA_TARGET_OFFSET.x,
+    y: MODEL_GROUP_POSITION.y + CAMERA_TARGET_OFFSET.y,
+    z: MODEL_GROUP_POSITION.z + CAMERA_TARGET_OFFSET.z
+  };
+
+  // 相机视野角度（FOV）
+  const CAMERA_FOV = 75;      // 视野角度，增大=更广角，减小=更窄角
 
   const GEOMETRY_ENGINE = {
     getShapeParams: (shapeValue: number, x: number) => {
@@ -160,24 +204,33 @@
     const containerWidth = container.clientWidth || container.offsetWidth || 400;
     const containerHeight = container.clientHeight || container.offsetHeight || 400;
     const aspect = containerWidth > 0 && containerHeight > 0 ? containerWidth / containerHeight : 1;
-    camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-    // 从右上方看模型：x为正（右侧），y稍微高一点但视角向下，z为正（前方）
-    // 类似男友看女友的高度差，视角稍微向下
-    camera.position.set(30, TORSO_HEIGHT * 0.5 + 15, 30);
+    
+    // 使用配置的相机参数
+    camera = new THREE.PerspectiveCamera(CAMERA_FOV, aspect, 0.1, 1000);
+    camera.position.set(CAMERA_POSITION.x, CAMERA_POSITION.y, CAMERA_POSITION.z);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(containerWidth, containerHeight);
     renderer.setClearColor(0x000000, 0); // 透明背景
     container.appendChild(renderer.domElement);
 
+    // 使用配置的目标点
     controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, BUST_Y_POS, 0);
+    controls.target.set(CAMERA_TARGET.x, CAMERA_TARGET.y, CAMERA_TARGET.z);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.update(); // 立即更新控制器以应用初始位置
   }
 
   function _setupGeometry() {
+    // 创建模型组，用于整体控制模型位置
+    modelGroup = new THREE.Group();
+    modelGroup.position.set(
+      MODEL_GROUP_POSITION.x,
+      MODEL_GROUP_POSITION.y,
+      MODEL_GROUP_POSITION.z
+    );
+
     const boxGeo = new THREE.BoxGeometry(1, 1, 1, 1, 1, 1);
     meshes.torsoTop = new THREE.Mesh(boxGeo, materials.body);
     meshes.torsoShirt = new THREE.Mesh(boxGeo, materials.shirt);
@@ -198,10 +251,14 @@
     meshes.leftEyeGroup.add(meshes.leftEyeball, meshes.leftPupil, meshes.leftEyebrow);
     meshes.rightEyeGroup.add(meshes.rightEyeball, meshes.rightPupil, meshes.rightEyebrow);
 
-    scene.add(
+    // 将所有模型元素添加到模型组中
+    modelGroup.add(
       meshes.torsoTop, meshes.torsoShirt, meshes.torsoPants,
       meshes.leftEyeGroup, meshes.rightEyeGroup
     );
+
+    // 将模型组添加到场景
+    scene.add(modelGroup);
     _updateVisibility();
   }
 
