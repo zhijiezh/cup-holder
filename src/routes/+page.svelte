@@ -1,0 +1,504 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import ModelViewer from '$lib/ModelViewer.svelte';
+	import Picker from '$lib/Picker.svelte';
+	import NumberPicker from '$lib/NumberPicker.svelte';
+	import { getTranslation, type Language, type Region } from '$lib/i18n';
+	import {
+		calculateBraSize,
+		braSizeToMeasurements,
+		type BraSize
+	} from '$lib/braSizeConverter';
+	import {
+		MEASUREMENT_RANGES,
+		DEFAULT_SIZES,
+		CUP_OPTIONS,
+		THEME_OPTIONS,
+		REGION_OPTIONS,
+		LANGUAGE_OPTIONS,
+		DEFAULT_SETTINGS,
+		MODEL_UPDATE_DELAY,
+		THEME_CHANGE_DELAY
+	} from '$lib/constants';
+
+	// ============================================================================
+	// 状态管理
+	// ============================================================================
+
+	let language: Language = DEFAULT_SETTINGS.LANGUAGE;
+	let region: Region = DEFAULT_SETTINGS.REGION;
+	let currentTheme: string = DEFAULT_SETTINGS.THEME;
+	let modelViewer: ModelViewer;
+
+	// 测量值状态
+	let underbust: number = MEASUREMENT_RANGES.UNDERBUST_DEFAULT;
+	let bust: number = MEASUREMENT_RANGES.BUST_DEFAULT;
+	
+	// 计算上胸围的动态范围（基于下胸围）
+	$: bustMin = underbust;
+	$: bustMax = underbust + MEASUREMENT_RANGES.BUST_RANGE_OFFSET;
+	
+	// 尺码选择状态
+	let selectedBand: number = DEFAULT_SIZES.BAND;
+	let selectedCup: string = DEFAULT_SIZES.CUP;
+
+	// 国际化翻译
+	$: t = getTranslation(language);
+
+	// ============================================================================
+	// 工具函数
+	// ============================================================================
+
+	/**
+	 * 根据地区生成可用的band选项
+	 */
+	function getBandOptions(region: Region): number[] {
+		if (region === 'CN' || region === 'US') {
+			// 中国和美国使用相同的尺码系统（28-44）
+			return [28, 30, 32, 34, 36, 38, 40, 42, 44];
+		} else {
+			// 日本使用不同的尺码系统（60-100）
+			return [60, 65, 70, 75, 80, 85, 90, 95, 100];
+		}
+	}
+
+	// ============================================================================
+	// 核心计算函数
+	// ============================================================================
+
+	/**
+	 * 从上下胸围测量值计算对应的bra尺码
+	 */
+	function calculateFromMeasurements() {
+		const braSize = calculateBraSize(underbust, bust, region);
+		selectedBand = braSize.band;
+		selectedCup = braSize.cup;
+		updateModel();
+	}
+
+	/**
+	 * 从选择的bra尺码反推上下胸围测量值
+	 */
+	function calculateFromSize() {
+		const measurements = braSizeToMeasurements(selectedBand, selectedCup, region);
+		underbust = measurements.underbust;
+		bust = measurements.bust;
+		updateModel();
+	}
+
+	/**
+	 * 更新3D模型显示
+	 */
+	function updateModel() {
+		if (modelViewer) {
+			modelViewer.updateState(underbust, bust);
+		} else {
+			// 如果 modelViewer 还没准备好，延迟执行
+			setTimeout(() => {
+				if (modelViewer) {
+					modelViewer.updateState(underbust, bust);
+				}
+			}, MODEL_UPDATE_DELAY);
+		}
+	}
+
+	// ============================================================================
+	// 事件处理函数
+	// ============================================================================
+
+	/**
+	 * 处理band尺码变化
+	 */
+	function handleBandChange(event: CustomEvent<number>) {
+		selectedBand = event.detail;
+		calculateFromSize();
+	}
+
+	/**
+	 * 处理cup罩杯变化
+	 */
+	function handleCupChange(event: CustomEvent<string>) {
+		selectedCup = event.detail;
+		calculateFromSize();
+	}
+
+	/**
+	 * 处理下胸围测量值变化
+	 * 需要确保上胸围在有效范围内
+	 */
+	function handleUnderbustChange(event: CustomEvent<number>) {
+		underbust = event.detail;
+		// 确保上胸围不会小于下胸围
+		if (bust < underbust) {
+			bust = underbust;
+		}
+		// 确保上胸围不会超过最大范围
+		const maxBust = underbust + MEASUREMENT_RANGES.BUST_RANGE_OFFSET;
+		if (bust > maxBust) {
+			bust = maxBust;
+		}
+		calculateFromMeasurements();
+	}
+
+	/**
+	 * 处理上胸围测量值变化
+	 */
+	function handleBustChange(event: CustomEvent<number>) {
+		bust = event.detail;
+		calculateFromMeasurements();
+	}
+
+	/**
+	 * 处理地区变化
+	 * 保持测量值不变，重新计算对应地区的尺码
+	 */
+	function handleRegionChange(event: CustomEvent<Region>) {
+		region = event.detail;
+		calculateFromMeasurements();
+	}
+
+	/**
+	 * 处理语言变化
+	 */
+	function handleLanguageChange(event: CustomEvent<Language>) {
+		language = event.detail;
+	}
+
+	/**
+	 * 处理主题变化
+	 */
+	function handleThemeChange(event: CustomEvent<string>) {
+		currentTheme = event.detail;
+		// 延迟执行，确保modelViewer已经初始化
+		setTimeout(() => {
+			if (modelViewer && typeof modelViewer.setTheme === 'function') {
+				modelViewer.setTheme(currentTheme);
+			}
+		}, THEME_CHANGE_DELAY);
+	}
+
+	// ============================================================================
+	// 生命周期
+	// ============================================================================
+
+	/**
+	 * 组件挂载后初始化
+	 */
+	onMount(() => {
+		// 延迟执行，确保modelViewer已经挂载
+		setTimeout(() => {
+			calculateFromMeasurements();
+		}, MODEL_UPDATE_DELAY);
+	});
+</script>
+
+<div class="background-layer"></div>
+<div class="app-container">
+	<!-- 顶部标题 -->
+	<div class="header">
+		<h1 class="title">{t.title}</h1>
+	</div>
+
+	<!-- 大号尺码显示 -->
+	<div class="size-display">
+		<Picker
+			options={getBandOptions(region)}
+			value={selectedBand}
+			label=""
+			size="large"
+			on:change={(e) => handleBandChange(e)}
+		/>
+		<Picker
+			options={CUP_OPTIONS}
+			value={selectedCup}
+			label=""
+			size="large"
+			on:change={(e) => handleCupChange(e)}
+		/>
+	</div>
+
+		<!-- 测量值显示（平行文字） -->
+		<div class="measurements">
+			<div class="measurement-item">
+				<NumberPicker
+					value={bust}
+					min={bustMin}
+					max={bustMax}
+					step={0.5}
+					label={t.bust}
+					unit="cm"
+					dragHint=""
+					on:change={(e) => handleBustChange(e)}
+				/>
+			</div>
+			<div class="measurement-item">
+				<NumberPicker
+					value={underbust}
+					min={MEASUREMENT_RANGES.UNDERBUST_MIN}
+					max={MEASUREMENT_RANGES.UNDERBUST_MAX}
+					step={1}
+					label={t.underbust}
+					unit="cm"
+					dragHint=""
+					on:change={(e) => handleUnderbustChange(e)}
+				/>
+			</div>
+		</div>
+
+	<!-- 设置区域（主题、地区、语言） -->
+	<div class="settings-section">
+		<Picker
+			options={THEME_OPTIONS}
+			value={currentTheme}
+			label={t.theme}
+			displayMap={t.themes}
+			on:change={(e) => handleThemeChange(e)}
+		/>
+		<Picker
+			options={REGION_OPTIONS}
+			value={region}
+			label={t.region}
+			displayMap={t.regions}
+			on:change={(e) => handleRegionChange(e)}
+		/>
+		<Picker
+			options={LANGUAGE_OPTIONS}
+			value={language}
+			label={t.language}
+			displayMap={t.languages}
+			on:change={(e) => handleLanguageChange(e)}
+		/>
+	</div>
+
+	<!-- 3D模型 -->
+	<div class="model-section">
+		<ModelViewer bind:this={modelViewer} />
+	</div>
+</div>
+
+<style>
+	.background-layer {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		z-index: -1;
+	}
+
+	.background-layer::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+			radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+		pointer-events: none;
+	}
+
+	.app-container {
+		min-height: 100vh;
+		display: grid;
+		grid-template-areas:
+			'header'
+			'size'
+			'measurements'
+			'settings'
+			'main';
+		grid-template-columns: 1fr;
+		grid-template-rows: auto auto auto auto 1fr;
+		gap: 1.5rem;
+		padding: 2rem;
+		position: relative;
+		overflow-x: hidden;
+		overflow-y: auto;
+		max-width: 1200px;
+		margin: 0 auto;
+		width: 100%;
+		box-sizing: border-box;
+		z-index: 1;
+	}
+
+
+	.header {
+		grid-area: header;
+		position: relative;
+		z-index: 2;
+	}
+
+	.title {
+		font-size: clamp(48px, 8vw, 128px);
+		font-weight: 700;
+		color: white;
+		margin: 0;
+		line-height: 1.1;
+		text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+		letter-spacing: -0.02em;
+		white-space: nowrap;
+		overflow: visible;
+		word-break: keep-all;
+	}
+
+	.size-display {
+		grid-area: size;
+		display: flex;
+		justify-content: flex-start;
+		align-items: baseline;
+		gap: 0.5rem;
+		position: relative;
+		z-index: 2;
+		flex-wrap: nowrap;
+		overflow: hidden;
+	}
+
+	.measurements {
+		grid-area: measurements;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		position: relative;
+		z-index: 2;
+	}
+
+	.measurement-item {
+		display: flex;
+		align-items: baseline;
+		gap: 0;
+		font-size: 0.9375rem;
+		flex-wrap: nowrap;
+	}
+
+	.settings-section {
+		grid-area: settings;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		position: relative;
+		z-index: 2;
+		align-items: flex-start;
+	}
+
+	.model-section {
+		grid-area: model;
+		position: fixed;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		min-height: 100vh;
+		height: 100vh;
+		width: 100vw;
+		margin: 0;
+		padding: 0;
+		overflow: visible;
+		pointer-events: none;
+		z-index: 0;
+		/* 透明背景，让模型融入页面，像封面图 */
+	}
+
+	.model-section :global(div) {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 120vw !important;
+		height: 120vh !important;
+		min-width: 100vw;
+		min-height: 100vh;
+		margin: 0;
+		padding: 0;
+		pointer-events: none;
+	}
+
+	.model-section :global(canvas) {
+		display: block !important;
+		width: 100% !important;
+		height: 100% !important;
+		background: transparent !important;
+		margin: 0;
+		padding: 0;
+		pointer-events: auto;
+		object-fit: cover;
+	}
+
+	/* 移动端布局 */
+	@media (max-width: 768px) {
+		.app-container {
+		grid-template-areas:
+			'header'
+			'size'
+			'measurements'
+			'settings'
+			'main';
+			grid-template-columns: 1fr;
+			grid-template-rows: auto auto auto auto auto;
+			padding: 1rem;
+			gap: 0.5rem;
+		}
+
+		.title {
+			font-size: clamp(48px, 12vw, 128px);
+			line-height: 1.1;
+			white-space: nowrap;
+			overflow: visible;
+			word-break: keep-all;
+		}
+
+		.size-display {
+			justify-content: flex-start;
+			gap: 0.25rem;
+			flex-wrap: nowrap;
+			overflow: hidden;
+		}
+
+		.measurement-item {
+			font-size: 0.875rem;
+			gap: 0;
+		}
+
+		.settings-section {
+			flex-direction: column;
+			gap: 0.5rem;
+		}
+
+		.model-section {
+			position: fixed;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			left: 0;
+			min-height: 100vh;
+			height: 100vh;
+			width: 100vw;
+			margin: 0;
+			padding: 0;
+			overflow: visible;
+		}
+
+		.model-section :global(div) {
+			position: absolute;
+			top: 66.67%;
+			left: 66.67%;
+			transform: translate(-50%, -50%);
+			width: 96vw !important;
+			height: 96vh !important;
+			min-width: 96vw;
+			min-height: 96vh;
+			margin: 0;
+			padding: 0;
+			pointer-events: none;
+		}
+
+		.model-section :global(canvas) {
+			width: 100% !important;
+			height: 100% !important;
+			margin: 0;
+			padding: 0;
+			pointer-events: auto;
+			object-fit: cover;
+		}
+	}
+</style>
