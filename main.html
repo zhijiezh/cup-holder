@@ -87,7 +87,7 @@
                 pants: { color: 0x966941, roughness: 0.9, metalness: 0.0 },
                 eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 },
                 pupil: { color: 0x000000, roughness: 0.0 },
-                eyebrow: { color: 0x000000, roughness: 0.8, angle: 0 }, // 中性眉毛
+                eyebrow: { color: 0x000000, roughness: 0.8, angle: 0 },
             },
             classic: {
                 background: 0x2a2a2a, // 深灰色
@@ -97,7 +97,7 @@
                 body: { color: 0x008cff, roughness: 0.5, metalness: 0.1 }, // 蓝色身体
                 eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 }, // 改为白色眼球
                 pupil: { color: 0x000000, roughness: 0.1 }, // 改为黑色瞳仁
-                eyebrow: { color: 0xcccccc, roughness: 0.8, angle: -0.15 }, // 轻微倒八字
+                eyebrow: { color: 0xcccccc, roughness: 0.8, angle: -0.15 },
             },
             toon: {
                 background: 0xbde8ff, // 柔和天蓝
@@ -109,7 +109,7 @@
                 pants: { color: 0x4a6b96 }, // 牛仔蓝色
                 eye: { color: 0xffffff, roughness: 0.1 }, // 保持白色，但让它更光滑以区别于衬衫
                 pupil: { color: 0x222222 },
-                eyebrow: { color: 0x5c4033, angle: 0.2 }, // 八字眉
+                eyebrow: { color: 0x5c4033, angle: 0.2 },
             },
             cyberpunk: {
                 background: 0x12081a, // 深紫色
@@ -121,7 +121,7 @@
                 pants: { color: 0x181818, roughness: 0.8, metalness: 0.2, emissive: 0x00ffff, emissiveIntensity: 1.5 },
                 eye: { color: 0xffffff, emissive: 0xff00ff, roughness: 0.1, metalness: 0.1, emissiveIntensity: 2.5 },
                 pupil: { color: 0xff00ff, emissive: 0xff00ff, emissiveIntensity: 3.0 },
-                eyebrow: { color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 1.0, angle: -0.25 }, // 愤怒的倒八字
+                eyebrow: { color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 1.0, angle: -0.25 },
             },
             alien: {
                 background: 0x05020d, // 深空紫
@@ -131,9 +131,10 @@
                 body: { color: 0x98fb98, roughness: 0.6, metalness: 0.1 }, // 浅绿色皮肤
                 eye: { color: 0x0a0a0a, roughness: 0.05, metalness: 1.0 }, // 乌黑发亮的眼睛
                 pupil: { color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 2.0 },
-                eyebrow: { color: 0x32cd32, roughness: 0.8, angle: 0.3 }, // 好奇的八字眉
+                eyebrow: { color: 0x32cd32, roughness: 0.8, angle: 0.3 },
             }
         };
+
         const DOM = {
             themeSelector: document.getElementById('themeSelector'),
             underbustSlider: document.getElementById('underbust'),
@@ -149,12 +150,15 @@
 
         // 常量
         const TORSO_HEIGHT = 40; 
-        const SEGMENTS_W = 1, SEGMENTS_H = 1, SEGMENTS_D = 1; 
-        const BUST_Y_POS_BASE = TORSO_HEIGHT * 0.25; // 眼睛的基础Y轴位置
-        const EYE_Y_OFFSET = 2.0; // 将眼睛整体向下偏移的量
-        const BUST_Y_POS = BUST_Y_POS_BASE - EYE_Y_OFFSET;
+        const BUST_Y_POS = TORSO_HEIGHT * 0.118; // 眼睛的基础Y轴位置
         const PIECEWISE_THRESHOLD = 50; 
         const PI = Math.PI;
+        const PUPIL_RADIUS_FACTOR = 0.4; // 瞳仁半径相对于眼球半径的比例
+        const PUPIL_Z_OFFSET = 0.1; // 瞳仁在眼球前方的偏移量，防止Z-fighting
+        const EYEBROW_WIDTH_FACTOR = 1.8; // 眉毛宽度相对于眼球半径的比例
+        const EYEBROW_HEIGHT_FACTOR = 0.25; // 眉毛高度相对于其宽度的比例
+        const EYEBROW_Y_OFFSET_FACTOR = 1.6; // 眉毛在眼球上方的距离比例
+        const EYEBROW_Z_OFFSET = 0.2; // 眉毛在身体前方的偏移量
         
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // █   1. 统一的几何引擎 (GEOMETRY_ENGINE)
@@ -268,7 +272,6 @@
                     foundShape: 0,
                 };
 
-                // --- 初始化流程 ---
                 this._setupScene();
                 this.setTheme(this.currentThemeName, true); // isInitial=true
                 this._setupGeometry();
@@ -329,7 +332,7 @@
              * 创建所有几何体对象(Mesh)和组(Group)，并将它们添加到场景中。
              */
             _setupGeometry() {
-                const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+                const boxGeo = new THREE.BoxGeometry(1, 1, 1, 1, 1, 1);
                 this.meshes.torsoTop = new THREE.Mesh(boxGeo, this.materials.body);
                 this.meshes.torsoShirt = new THREE.Mesh(boxGeo, this.materials.shirt);
                 this.meshes.torsoPants = new THREE.Mesh(boxGeo, this.materials.pants);
@@ -340,11 +343,9 @@
                 this.meshes.rightEyeball = new THREE.Mesh(new THREE.BufferGeometry(), this.materials.eye);
                 this.meshes.leftPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
                 this.meshes.rightPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
-                // 将 renderOrder 设置在 Mesh 上，而不是 Material
                 this.meshes.leftPupil.renderOrder = 1;
                 this.meshes.rightPupil.renderOrder = 1;
 
-                // 创建眉毛
                 this.meshes.leftEyebrow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.materials.eyebrow);
                 this.meshes.rightEyebrow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.materials.eyebrow);
 
@@ -407,12 +408,9 @@
                 this._updateTorsoAppearance(width, x);
 
                 const BUST_X_POS = width * 0.25;
-                // 关键修复: 将整个眼睛组向前偏移一点，以解决眼球和身体的Z-fighting问题
                 const eyeGroupZOffset = halfDepth + 0.05; 
-
                 this.meshes.leftEyeGroup.position.set(-BUST_X_POS, BUST_Y_POS, eyeGroupZOffset);
                 this.meshes.rightEyeGroup.position.set(BUST_X_POS, BUST_Y_POS, eyeGroupZOffset);
-
                 return params;
             }
             
@@ -424,16 +422,16 @@
                 let bustGeo;
                 if (params.mode === '圆柱 (c=x)') {
                     const { y, r_hemi } = params;
-                    const cylinderGeo = new THREE.CylinderGeometry(r_hemi, r_hemi, y, 32);
-                    const sphereGeo = new THREE.SphereGeometry(r_hemi, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+                    const cylinderGeo = new THREE.CylinderGeometry(r_hemi, r_hemi, y, 24, 1);
+                    const sphereGeo = new THREE.SphereGeometry(r_hemi, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
                     cylinderGeo.translate(0, y / 2, 0);
                     sphereGeo.translate(0, y, 0);
                     bustGeo = mergeBufferGeometries([cylinderGeo, sphereGeo]);
                     bustGeo.rotateX(Math.PI / 2);
                 } else {
                     const { r_A, r_hemi, h } = params;
-                    const thetaLength = Math.asin(r_hemi / r_A);
-                    bustGeo = new THREE.SphereGeometry(r_A, 32, 16, 0, Math.PI * 2, 0, thetaLength);
+                    const thetaLength = Math.asin(r_hemi / r_A); // 计算球帽顶角
+                    bustGeo = new THREE.SphereGeometry(r_A, 24, 12, 0, Math.PI * 2, 0, thetaLength);
                     bustGeo.rotateX(Math.PI / 2);
                     bustGeo.translate(0, 0, -(r_A - h));
                 }
@@ -448,10 +446,10 @@
              * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
              */
             _updatePupilGeometry(params) {
-                const pupilRadius = params.r_hemi * 0.4;
+                const pupilRadius = params.r_hemi * PUPIL_RADIUS_FACTOR;
                 this.meshes.leftPupil.scale.set(pupilRadius, pupilRadius, 1);
                 this.meshes.rightPupil.scale.set(pupilRadius, pupilRadius, 1);
-                const pupilZOffset = params.h + 0.1;
+                const pupilZOffset = params.h + PUPIL_Z_OFFSET;
                 this.meshes.leftPupil.position.z = pupilZOffset;
                 this.meshes.rightPupil.position.z = pupilZOffset;
             }
@@ -461,20 +459,18 @@
              * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
              */
             _updateEyebrowGeometry(params) {
-                const eyebrowWidth = params.r_hemi * 1.8; // 眉毛宽度
-                const eyebrowHeight = eyebrowWidth * 0.25; // 眉毛高度
+                const eyebrowWidth = params.r_hemi * EYEBROW_WIDTH_FACTOR;
+                const eyebrowHeight = eyebrowWidth * EYEBROW_HEIGHT_FACTOR;
                 this.meshes.leftEyebrow.scale.set(eyebrowWidth, eyebrowHeight, 1);
                 this.meshes.rightEyebrow.scale.set(eyebrowWidth, eyebrowHeight, 1);
 
-                const eyebrowYOffset = params.r_hemi * 1.6; // 眉毛在眼睛上方的距离
+                const eyebrowYOffset = params.r_hemi * EYEBROW_Y_OFFSET_FACTOR;
                 this.meshes.leftEyebrow.position.y = eyebrowYOffset;
                 this.meshes.rightEyebrow.position.y = eyebrowYOffset;
 
-                // 关键修复1: 将眉毛向前移动，避免与身体重叠
-                this.meshes.leftEyebrow.position.z = 0.2;
-                this.meshes.rightEyebrow.position.z = 0.2;
+                this.meshes.leftEyebrow.position.z = EYEBROW_Z_OFFSET;
+                this.meshes.rightEyebrow.position.z = EYEBROW_Z_OFFSET;
 
-                // 关键修复2: 根据主题设置眉毛角度
                 const theme = THEMES[this.currentThemeName];
                 this.meshes.leftEyebrow.rotation.z = theme.eyebrow.angle || 0;
                 this.meshes.rightEyebrow.rotation.z = -(theme.eyebrow.angle || 0);
@@ -502,20 +498,9 @@
             _setupMaterials(theme) {
                 for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil', 'eyebrow']) {
                     if (theme[key]) {
-                        // 1. 复制主题中的属性，并分离出非材质属性
                         const { angle, ...materialProps } = { ...theme[key] };
+                        const MaterialClass = THREE.MeshStandardMaterial;
 
-                        // 2. 根据主题类型选择材质类
-                        const isToon = theme.type === 'toon';
-                        const MaterialClass = isToon ? THREE.MeshToonMaterial : THREE.MeshStandardMaterial;
-
-                        // 3. 如果是Toon材质，移除不兼容的PBR属性
-                        if (isToon) {
-                            delete materialProps.roughness;
-                            delete materialProps.metalness;
-                        }
-
-                        // 4. 为瞳仁设置特殊渲染属性
                         if (key === 'pupil') {
                             materialProps.side = THREE.DoubleSide;
                             materialProps.depthTest = false;
