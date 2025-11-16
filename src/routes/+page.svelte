@@ -101,7 +101,8 @@
 			// inch 显示为整数
 			return Math.round(cmToInch(value));
 		}
-		return value;
+		// cm 也显示为整数
+		return Math.round(value);
 	}
 
 	/**
@@ -111,7 +112,8 @@
 		if (sourceUnit === 'inch') {
 			return inchToCm(value);
 		}
-		return value;
+		// cm 确保返回整数，避免小数导致的计算误差
+		return Math.round(value);
 	}
 
 	// 计算显示值（根据当前单位）

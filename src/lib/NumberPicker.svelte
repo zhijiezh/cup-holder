@@ -32,7 +32,7 @@
 	 * 增加数值
 	 */
 	function increment() {
-		const newValue = Math.min(value + step, max);
+		const newValue = Math.round(Math.min(value + step, max));
 		if (newValue !== value) {
 			dispatch('change', newValue);
 		}
@@ -42,7 +42,7 @@
 	 * 减少数值
 	 */
 	function decrement() {
-		const newValue = Math.max(value - step, min);
+		const newValue = Math.round(Math.max(value - step, min));
 		if (newValue !== value) {
 			dispatch('change', newValue);
 		}
@@ -93,7 +93,7 @@
 		// 每20px移动一个步进
 		const DRAG_SENSITIVITY = 20;
 		const steps = Math.round(deltaX / DRAG_SENSITIVITY);
-		const newValue = Math.max(min, Math.min(max, touchStartValue + steps * step));
+		const newValue = Math.round(Math.max(min, Math.min(max, touchStartValue + steps * step)));
 		if (newValue !== value) {
 			dispatch('change', newValue);
 		}
@@ -126,7 +126,7 @@
 		// 每20px移动一个步进
 		const DRAG_SENSITIVITY = 20;
 		const steps = Math.round(deltaX / DRAG_SENSITIVITY);
-		const newValue = Math.max(min, Math.min(max, touchStartValue + steps * step));
+		const newValue = Math.round(Math.max(min, Math.min(max, touchStartValue + steps * step)));
 		if (newValue !== value) {
 			dispatch('change', newValue);
 		}
@@ -145,7 +145,7 @@
 	function handleWheel(event: WheelEvent) {
 		event.preventDefault();
 		const delta = event.deltaX > 0 ? step : -step;
-		const newValue = Math.max(min, Math.min(max, value + delta));
+		const newValue = Math.round(Math.max(min, Math.min(max, value + delta)));
 		if (newValue !== value) {
 			dispatch('change', newValue);
 		}
