@@ -107,6 +107,39 @@
 	}
 
 	/**
+	 * 处理鼠标按下事件
+	 */
+	function handleMouseDown(event: MouseEvent) {
+		event.preventDefault();
+		touchStartX = event.clientX;
+		touchStartValue = value;
+		isDragging = true;
+	}
+
+	/**
+	 * 处理鼠标移动事件（水平拖动调整数值）
+	 */
+	function handleMouseMove(event: MouseEvent) {
+		if (!isDragging) return;
+		event.preventDefault();
+		const deltaX = event.clientX - touchStartX;
+		// 每20px移动一个步进
+		const DRAG_SENSITIVITY = 20;
+		const steps = Math.round(deltaX / DRAG_SENSITIVITY);
+		const newValue = Math.max(min, Math.min(max, touchStartValue + steps * step));
+		if (newValue !== value) {
+			dispatch('change', newValue);
+		}
+	}
+
+	/**
+	 * 处理鼠标抬起事件
+	 */
+	function handleMouseUp() {
+		isDragging = false;
+	}
+
+	/**
 	 * 处理鼠标滚轮事件（水平滚动调整数值）
 	 */
 	function handleWheel(event: WheelEvent) {
@@ -120,17 +153,41 @@
 
 	onMount(() => {
 		if (numberDisplayElement) {
-			// 使用非passive事件监听器
+			// 触摸事件（移动端）
 			numberDisplayElement.addEventListener('touchstart', handleTouchStart, { passive: false });
 			numberDisplayElement.addEventListener('touchmove', handleTouchMove, { passive: false });
 			numberDisplayElement.addEventListener('touchend', handleTouchEnd, { passive: false });
+			
+			// 鼠标事件（桌面端）
+			numberDisplayElement.addEventListener('mousedown', handleMouseDown);
+			
+			// 滚轮事件
 			numberDisplayElement.addEventListener('wheel', handleWheel, { passive: false });
+
+			// 全局鼠标事件（用于处理鼠标移出元素外的情况）
+			const handleGlobalMouseMove = (event: MouseEvent) => {
+				if (isDragging) {
+					handleMouseMove(event);
+				}
+			};
+
+			const handleGlobalMouseUp = () => {
+				if (isDragging) {
+					handleMouseUp();
+				}
+			};
+
+			document.addEventListener('mousemove', handleGlobalMouseMove);
+			document.addEventListener('mouseup', handleGlobalMouseUp);
 
 			return () => {
 				numberDisplayElement.removeEventListener('touchstart', handleTouchStart);
 				numberDisplayElement.removeEventListener('touchmove', handleTouchMove);
 				numberDisplayElement.removeEventListener('touchend', handleTouchEnd);
+				numberDisplayElement.removeEventListener('mousedown', handleMouseDown);
 				numberDisplayElement.removeEventListener('wheel', handleWheel);
+				document.removeEventListener('mousemove', handleGlobalMouseMove);
+				document.removeEventListener('mouseup', handleGlobalMouseUp);
 			};
 		}
 	});

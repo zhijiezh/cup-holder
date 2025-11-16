@@ -1,5 +1,5 @@
 export type Language = 'zh' | 'en';
-export type Region = 'CN' | 'US' | 'JP';
+export type Region = 'CN' | 'US' | 'JP' | 'UK';
 export type Unit = 'cm' | 'inch';
 
 export const translations = {
@@ -15,7 +15,8 @@ export const translations = {
 		regions: {
 			CN: '中国',
 			US: '美国',
-			JP: '日本'
+			JP: '日本',
+			UK: '英国'
 		},
 		languages: {
 			zh: '中文',
@@ -46,7 +47,8 @@ export const translations = {
 		regions: {
 			CN: 'China',
 			US: 'USA',
-			JP: 'Japan'
+			JP: 'Japan',
+			UK: 'UK'
 		},
 		languages: {
 			zh: '中文',

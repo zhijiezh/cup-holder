@@ -7,12 +7,13 @@
 	import {
 		calculateBraSize,
 		braSizeToMeasurements,
+		getBandOptions,
+		getCupOptions,
 		type BraSize
 	} from '$lib/braSizeConverter';
 	import {
 		MEASUREMENT_RANGES,
 		DEFAULT_SIZES,
-		CUP_OPTIONS,
 		THEME_OPTIONS,
 		REGION_OPTIONS,
 		LANGUAGE_OPTIONS,
@@ -40,8 +41,21 @@
 	$: bustMin = underbust;
 	$: bustMax = underbust + MEASUREMENT_RANGES.BUST_RANGE_OFFSET;
 	
-	// 尺码选择状态
-	let selectedBand: number = DEFAULT_SIZES.BAND;
+	// 尺码选择状态（根据地区初始化）
+	// 使用响应式语句确保 band 选项根据地区正确初始化
+	// 根据测量值范围动态生成 band 选项
+	$: bandOptions = getBandOptions(
+		region,
+		MEASUREMENT_RANGES.UNDERBUST_MIN,
+		MEASUREMENT_RANGES.UNDERBUST_MAX
+	);
+	let selectedBand: number = 75; // 初始值，会在响应式中更新
+	$: {
+		// 如果当前选中的 band 不在新地区的选项中，选择中间值
+		if (!bandOptions.includes(selectedBand)) {
+			selectedBand = bandOptions[Math.floor(bandOptions.length / 2)] || 75;
+		}
+	}
 	let selectedCup: string = DEFAULT_SIZES.CUP;
 
 	// 国际化翻译
@@ -51,18 +65,8 @@
 	// 工具函数
 	// ============================================================================
 
-	/**
-	 * 根据地区生成可用的band选项
-	 */
-	function getBandOptions(region: Region): number[] {
-		if (region === 'CN' || region === 'US') {
-			// 中国和美国使用相同的尺码系统（28-44）
-			return [28, 30, 32, 34, 36, 38, 40, 42, 44];
-		} else {
-			// 日本使用不同的尺码系统（60-100）
-			return [60, 65, 70, 75, 80, 85, 90, 95, 100];
-		}
-	}
+	// 动态生成 cup 选项（根据当前地区）
+	$: cupOptions = getCupOptions(region);
 
 	/**
 	 * 单位转换函数
@@ -257,14 +261,14 @@
 	<!-- 大号尺码显示 -->
 	<div class="size-display">
 		<Picker
-			options={getBandOptions(region)}
+			options={bandOptions}
 			value={selectedBand}
 			label=""
 			size="large"
 			on:change={(e) => handleBandChange(e)}
 		/>
 		<Picker
-			options={CUP_OPTIONS}
+			options={cupOptions}
 			value={selectedCup}
 			label=""
 			size="large"
