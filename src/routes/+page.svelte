@@ -9,6 +9,7 @@
 		braSizeToMeasurements,
 		getBandOptions,
 		getCupOptions,
+		cm,
 		type BraSize
 	} from '$lib/braSizeConverter';
 	import {
@@ -46,8 +47,8 @@
 	// 根据测量值范围动态生成 band 选项
 	$: bandOptions = getBandOptions(
 		region,
-		MEASUREMENT_RANGES.UNDERBUST_MIN,
-		MEASUREMENT_RANGES.UNDERBUST_MAX
+		cm(MEASUREMENT_RANGES.UNDERBUST_MIN),
+		cm(MEASUREMENT_RANGES.UNDERBUST_MAX)
 	);
 	let selectedBand: number = 70; // 初始值，会在响应式中更新
 	$: {
@@ -118,7 +119,7 @@
 	 * 从上下胸围测量值计算对应的bra尺码
 	 */
 	function calculateFromMeasurements() {
-		const braSize = calculateBraSize(underbust, bust, region);
+		const braSize = calculateBraSize(cm(underbust), cm(bust), region);
 		selectedBand = braSize.band;
 		selectedCup = braSize.cup;
 		updateModel();
@@ -129,8 +130,8 @@
 	 */
 	function calculateFromSize() {
 		const measurements = braSizeToMeasurements(selectedBand, selectedCup, region);
-		underbust = measurements.underbust;
-		bust = measurements.bust;
+		underbust = measurements.underbust.toCm();
+		bust = measurements.bust.toCm();
 		updateModel();
 	}
 
@@ -265,6 +266,7 @@
 			value={selectedBand}
 			label=""
 			size="large"
+			class="text-right"
 			on:change={(e) => handleBandChange(e)}
 		/>
 		<Picker
@@ -272,6 +274,7 @@
 			value={selectedCup}
 			label=""
 			size="large"
+      className="text-left"
 			on:change={(e) => handleCupChange(e)}
 		/>
 	</div>
@@ -418,7 +421,6 @@
 		display: flex;
 		justify-content: flex-start;
 		align-items: baseline;
-		gap: 0.5rem;
 		position: relative;
 		z-index: 2;
 		flex-wrap: nowrap;
@@ -535,7 +537,6 @@
 
 		.size-display {
 			justify-content: flex-start;
-			gap: 0.25rem;
 			flex-wrap: nowrap;
 			overflow: hidden;
 		}

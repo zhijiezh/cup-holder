@@ -44,7 +44,6 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 0.25rem;
 	}
 
 	.picker-label {
@@ -96,7 +95,7 @@
 	/* 移动端优化 */
 	@media (max-width: 768px) {
 		.picker.large {
-			font-size: 128px;
+			font-size: 100px;
 		}
 
 		.picker-label {
