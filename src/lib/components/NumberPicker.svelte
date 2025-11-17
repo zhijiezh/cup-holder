@@ -194,7 +194,6 @@
 			aria-valuemax={max}
 			aria-valuenow={value}
 			aria-labelledby={labelId}
-			aria-description={dragHint || undefined}
 		>
 			<div class="prev-value">{getPrevValue() !== null ? formatValue(getPrevValue()!) : ''}</div>
 			<div class="current-value">

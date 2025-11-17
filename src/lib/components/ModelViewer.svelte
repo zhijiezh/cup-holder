@@ -399,8 +399,9 @@
 		(meshes.rightEyebrow as THREE.Mesh).position.z = EYEBROW_Z_OFFSET;
 
 		const theme = THEMES[currentThemeName];
-		(meshes.leftEyebrow as THREE.Mesh).rotation.z = theme.eyebrow.angle || 0;
-		(meshes.rightEyebrow as THREE.Mesh).rotation.z = -(theme.eyebrow.angle || 0);
+		const eyebrowAngle = theme.eyebrow?.angle || 0;
+		(meshes.leftEyebrow as THREE.Mesh).rotation.z = eyebrowAngle;
+		(meshes.rightEyebrow as THREE.Mesh).rotation.z = -eyebrowAngle;
 	}
 
 	const materialKeys = ['body', 'shirt', 'pants', 'eye', 'pupil', 'eyebrow'] as const;
