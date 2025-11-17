@@ -168,8 +168,8 @@
 	/**
 	 * 从上下胸围测量值计算对应的bra尺码
 	 */
-	function calculateFromMeasurements() {
-		const braSize = calculateBraSize(cm(underbust), cm(bust), region);
+	function calculateFromMeasurements(targetRegion: Region = region) {
+		const braSize = calculateBraSize(cm(underbust), cm(bust), targetRegion);
 		selectedBand = braSize.band;
 		selectedCup = braSize.cup;
 		updateModel();
@@ -178,8 +178,8 @@
 	/**
 	 * 从选择的bra尺码反推上下胸围测量值
 	 */
-	function calculateFromSize() {
-		const measurements = braSizeToMeasurements(selectedBand, selectedCup, region);
+	function calculateFromSize(targetRegion: Region = region) {
+		const measurements = braSizeToMeasurements(selectedBand, selectedCup, targetRegion);
 		underbust = measurements.underbust.toCm();
 		bust = measurements.bust.toCm();
 		updateModel();
@@ -254,8 +254,9 @@
 	 * 保持测量值不变，重新计算对应地区的尺码
 	 */
 	function handleRegionChange(event: CustomEvent<Region>) {
-		settingsStore.setRegion(event.detail);
-		calculateFromMeasurements();
+		const nextRegion = event.detail;
+		settingsStore.setRegion(nextRegion);
+		calculateFromMeasurements(nextRegion);
 	}
 
 	/**

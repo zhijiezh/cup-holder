@@ -130,7 +130,6 @@ const UK_CUP_NAMES = [
 ];
 
 const JP_CUP_NAMES = [
-	'AAA',
 	'AA',
 	'A',
 	'B',
@@ -173,17 +172,17 @@ const cnCupStrategy = createLinearCupStrategy({
 });
 
 const jpCupStrategy = createLinearCupStrategy({
-	firstCupThreshold: cm(6.5),
+	firstCupThreshold: cm(7.5),
 	cupStep: cm(2.5),
-	belowFirstCupName: 'AAA',
+	belowFirstCupName: 'AA',
 	belowFirstCupValue: cm(5)
 });
 
 const inchCupStrategy = createLinearCupStrategy({
-	firstCupThreshold: inch(-1),
+	firstCupThreshold: inch(1),
 	cupStep: inch(1),
 	belowFirstCupName: 'AA',
-	belowFirstCupValue: inch(-1)
+	belowFirstCupValue: inch(0)
 });
 
 export const REGION_CONFIGS: Record<Region, RegionConfig> = {
@@ -200,7 +199,8 @@ export const REGION_CONFIGS: Record<Region, RegionConfig> = {
 	US: {
 		...modernInchBand,
 		cupStep: inch(1),
-		firstCupThreshold: inch(-1),
+		firstCupThreshold: inch(1),
+		cupGenerationStart: inch(0),
 		cupNames: US_CUP_NAMES,
 		...inchCupStrategy,
 		useBandForDifference: true,
@@ -209,7 +209,8 @@ export const REGION_CONFIGS: Record<Region, RegionConfig> = {
 	US_CLASSIC: {
 		...classicInchBand,
 		cupStep: inch(1),
-		firstCupThreshold: inch(-1),
+		firstCupThreshold: inch(1),
+		cupGenerationStart: inch(0),
 		cupNames: US_CUP_NAMES,
 		...inchCupStrategy,
 		useBandForDifference: true,
@@ -218,7 +219,7 @@ export const REGION_CONFIGS: Record<Region, RegionConfig> = {
 	JP: {
 		...metricFiveBand65,
 		cupStep: cm(2.5),
-		firstCupThreshold: cm(6.5),
+		firstCupThreshold: cm(7.5),
 		cupGenerationStart: cm(5),
 		cupNames: JP_CUP_NAMES,
 		...jpCupStrategy,
@@ -228,7 +229,8 @@ export const REGION_CONFIGS: Record<Region, RegionConfig> = {
 	UK: {
 		...modernInchBand,
 		cupStep: inch(1),
-		firstCupThreshold: inch(-1),
+		firstCupThreshold: inch(1),
+		cupGenerationStart: inch(0),
 		cupNames: UK_CUP_NAMES,
 		...inchCupStrategy,
 		useBandForDifference: true,

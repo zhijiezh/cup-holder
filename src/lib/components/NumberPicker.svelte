@@ -210,7 +210,7 @@
 	.number-picker-container {
 		display: flex;
 		flex-direction: row;
-		align-items: baseline;
+		align-items: center;
 		gap: 0.75rem;
 		width: auto;
 	}
