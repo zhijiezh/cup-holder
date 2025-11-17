@@ -37,5 +37,11 @@ export default defineConfig(
 				svelteConfig
 			}
 		}
+	},
+	{
+		files: ['**/+layout.svelte', '**/+page.svelte'],
+		rules: {
+			'svelte/valid-prop-names-in-kit-pages': 'off'
+		}
 	}
 );

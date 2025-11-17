@@ -341,7 +341,6 @@
 					step={1}
 					label={t.bust}
 					{unit}
-					dragHint=""
 					on:change={handleBustChange}
 				/>
 			</div>
@@ -353,7 +352,6 @@
 					step={1}
 					label={t.underbust}
 					{unit}
-					dragHint=""
 					on:change={handleUnderbustChange}
 				/>
 			</div>

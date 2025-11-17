@@ -11,8 +11,7 @@
 		max = 100,
 		step = 1,
 		label = '',
-		unit = '',
-		dragHint = '上下拖动'
+		unit = ''
 	}: {
 		id?: string;
 		value?: number;
@@ -21,7 +20,6 @@
 		step?: number;
 		label?: string;
 		unit?: string;
-		dragHint?: string;
 	} = $props();
 
 	const dispatch = createEventDispatcher();
