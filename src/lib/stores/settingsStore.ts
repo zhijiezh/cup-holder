@@ -42,11 +42,17 @@ function persist(state: SettingsState) {
 }
 
 function createSettingsStore() {
-	const { subscribe, update } = writable<SettingsState>(loadFromStorage(), (set) => {
-		// ensure latest defaults when store is first used
+	// 在客户端立即同步加载，避免闪现默认值
+	const initialValue = loadFromStorage();
+	const { subscribe, update } = writable<SettingsState>(initialValue, (set) => {
+		// 在客户端，确保使用最新的 localStorage 值
+		// 这会在组件首次订阅时立即执行
 		if (browser) {
 			const state = loadFromStorage();
-			set(state);
+			// 只有在值不同时才更新，避免不必要的触发
+			if (JSON.stringify(state) !== JSON.stringify(initialValue)) {
+				set(state);
+			}
 		}
 		return () => {};
 	});

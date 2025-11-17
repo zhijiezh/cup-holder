@@ -21,30 +21,18 @@
 		REGION_OPTIONS,
 		LANGUAGE_OPTIONS,
 		UNIT_OPTIONS,
-		DEFAULT_SETTINGS,
 		MODEL_UPDATE_DELAY,
 		THEME_CHANGE_DELAY
 	} from '$lib/config/constants';
-	import { settingsStore, type SettingsState } from '$lib/stores/settingsStore';
+	import { settingsStore } from '$lib/stores/settingsStore';
 	import { getThemeColors, buildThemeCssVariables, type ThemeName } from '$lib/theme/themeConfig';
 
 	// ============================================================================
 	// 状态管理
 	// ============================================================================
 
-	let language: Language = DEFAULT_SETTINGS.LANGUAGE;
-	let region: Region = DEFAULT_SETTINGS.REGION;
-	let currentTheme: ThemeName = DEFAULT_SETTINGS.THEME;
-	let unit: Unit = DEFAULT_SETTINGS.UNIT;
-	let settingsSnapshot: SettingsState = {
-		language,
-		region,
-		theme: currentTheme,
-		unit
-	};
-
-	$: settingsSnapshot = $settingsStore;
-	$: ({ language, region, unit, theme: currentTheme } = settingsSnapshot);
+	// 直接从 store 获取值，store 会在客户端立即从 localStorage 加载
+	$: ({ language, region, unit, theme: currentTheme } = $settingsStore);
 	let modelViewer: ModelViewer;
 	let themeCssVariables: Record<string, string> = {};
 	let themeCssVarString = '';
