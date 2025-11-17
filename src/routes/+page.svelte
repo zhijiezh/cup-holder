@@ -10,7 +10,9 @@
 		getBandOptions,
 		getCupOptions,
 		getRegionBrand,
-		cm
+		cm,
+		inch,
+		type Measurement
 	} from '$lib/logic/braSizeConverter';
 	import {
 		MEASUREMENT_RANGES,
@@ -47,13 +49,13 @@
 	let themeCssVariables: Record<string, string> = {};
 	let themeCssVarString = '';
 
-	// 测量值状态（内部始终使用 cm 存储）
-	let underbust: number = MEASUREMENT_RANGES.UNDERBUST_DEFAULT;
-	let bust: number = MEASUREMENT_RANGES.BUST_DEFAULT;
+	// 测量值状态（使用 Measurement 对象，内部始终使用 cm 存储）
+	let underbust: Measurement = cm(MEASUREMENT_RANGES.UNDERBUST_DEFAULT);
+	let bust: Measurement = cm(MEASUREMENT_RANGES.BUST_DEFAULT);
 
 	// 计算上胸围的动态范围（基于下胸围）
-	$: bustMin = underbust;
-	$: bustMax = underbust + MEASUREMENT_RANGES.BUST_RANGE_OFFSET;
+	$: bustMin = underbust.toCm();
+	$: bustMax = underbust.toCm() + MEASUREMENT_RANGES.BUST_RANGE_OFFSET;
 
 	// 尺码选择状态（根据地区初始化）
 	// 使用响应式语句确保 band 选项根据地区正确初始化
@@ -118,37 +120,41 @@
 	})();
 
 	/**
-	 * 单位转换函数
+	 * 将 Measurement 转换为显示单位
 	 */
-	function inchToCm(inch: number): number {
-		return inch * 2.54;
-	}
-
-	function cmToInch(cm: number): number {
-		return cm / 2.54;
-	}
-
-	/**
-	 * 将值转换为显示单位
-	 */
-	function toDisplayUnit(value: number, targetUnit: Unit): number {
+	function toDisplayUnit(measurement: Measurement, targetUnit: Unit): number {
 		if (targetUnit === 'inch') {
 			// inch 显示为整数
-			return Math.round(cmToInch(value));
+			return Math.round(measurement.toInch());
 		}
 		// cm 也显示为整数
-		return Math.round(value);
+		return Math.round(measurement.toCm());
 	}
 
 	/**
-	 * 将显示单位的值转换为内部存储的 cm 值
+	 * 将显示单位的值转换为 Measurement 对象
+	 * 如果新值的显示值与当前值的显示值相同，保持原值不变以避免精度损失
 	 */
-	function fromDisplayUnit(value: number, sourceUnit: Unit): number {
-		if (sourceUnit === 'inch') {
-			return inchToCm(value);
+	function fromDisplayUnit(
+		value: number,
+		sourceUnit: Unit,
+		currentMeasurement?: Measurement
+	): Measurement {
+		// 如果提供了当前值，检查显示值是否相同
+		if (currentMeasurement) {
+			const currentDisplay = toDisplayUnit(currentMeasurement, sourceUnit);
+			if (currentDisplay === value) {
+				// 显示值相同，保持原值不变以避免精度损失
+				return currentMeasurement;
+			}
 		}
-		// cm 确保返回整数，避免小数导致的计算误差
-		return Math.round(value);
+
+		if (sourceUnit === 'inch') {
+			// 直接使用 inch 单位，Measurement 类会自动处理单位转换
+			return inch(value);
+		}
+		// NumberPicker 已经保证了 value 是整数（step=1），直接使用即可
+		return cm(value);
 	}
 
 	// 计算显示值（根据当前单位）
@@ -156,10 +162,10 @@
 	$: bustDisplay = toDisplayUnit(bust, unit);
 
 	// 计算显示范围（根据当前单位）
-	$: underbustMinDisplay = toDisplayUnit(MEASUREMENT_RANGES.UNDERBUST_MIN, unit);
-	$: underbustMaxDisplay = toDisplayUnit(MEASUREMENT_RANGES.UNDERBUST_MAX, unit);
-	$: bustMinDisplay = toDisplayUnit(bustMin, unit);
-	$: bustMaxDisplay = toDisplayUnit(bustMax, unit);
+	$: underbustMinDisplay = toDisplayUnit(cm(MEASUREMENT_RANGES.UNDERBUST_MIN), unit);
+	$: underbustMaxDisplay = toDisplayUnit(cm(MEASUREMENT_RANGES.UNDERBUST_MAX), unit);
+	$: bustMinDisplay = toDisplayUnit(cm(bustMin), unit);
+	$: bustMaxDisplay = toDisplayUnit(cm(bustMax), unit);
 
 	// ============================================================================
 	// 核心计算函数
@@ -169,7 +175,7 @@
 	 * 从上下胸围测量值计算对应的bra尺码
 	 */
 	function calculateFromMeasurements(targetRegion: Region = region) {
-		const braSize = calculateBraSize(cm(underbust), cm(bust), targetRegion);
+		const braSize = calculateBraSize(underbust, bust, targetRegion);
 		selectedBand = braSize.band;
 		selectedCup = braSize.cup;
 		updateModel();
@@ -180,8 +186,8 @@
 	 */
 	function calculateFromSize(targetRegion: Region = region) {
 		const measurements = braSizeToMeasurements(selectedBand, selectedCup, targetRegion);
-		underbust = measurements.underbust.toCm();
-		bust = measurements.bust.toCm();
+		underbust = measurements.underbust;
+		bust = measurements.bust;
 		updateModel();
 	}
 
@@ -190,12 +196,12 @@
 	 */
 	function updateModel() {
 		if (modelViewer) {
-			modelViewer.updateState(underbust, bust);
+			modelViewer.updateState(underbust.toCm(), bust.toCm());
 		} else {
 			// 如果 modelViewer 还没准备好，延迟执行
 			setTimeout(() => {
 				if (modelViewer) {
-					modelViewer.updateState(underbust, bust);
+					modelViewer.updateState(underbust.toCm(), bust.toCm());
 				}
 			}, MODEL_UPDATE_DELAY);
 		}
@@ -226,15 +232,15 @@
 	 * 需要确保上胸围在有效范围内
 	 */
 	function handleUnderbustChange(event: CustomEvent<number>) {
-		// 将显示单位的值转换为 cm
-		underbust = fromDisplayUnit(event.detail, unit);
+		// 将显示单位的值转换为 Measurement，传入当前值以避免精度损失
+		underbust = fromDisplayUnit(event.detail, unit, underbust);
 		// 确保上胸围不会小于下胸围
-		if (bust < underbust) {
+		if (bust.lessThan(underbust)) {
 			bust = underbust;
 		}
 		// 确保上胸围不会超过最大范围
-		const maxBust = underbust + MEASUREMENT_RANGES.BUST_RANGE_OFFSET;
-		if (bust > maxBust) {
+		const maxBust = cm(underbust.toCm() + MEASUREMENT_RANGES.BUST_RANGE_OFFSET);
+		if (bust.toCm() > maxBust.toCm()) {
 			bust = maxBust;
 		}
 		calculateFromMeasurements();
@@ -244,8 +250,8 @@
 	 * 处理上胸围测量值变化
 	 */
 	function handleBustChange(event: CustomEvent<number>) {
-		// 将显示单位的值转换为 cm
-		bust = fromDisplayUnit(event.detail, unit);
+		// 将显示单位的值转换为 Measurement，传入当前值以避免精度损失
+		bust = fromDisplayUnit(event.detail, unit, bust);
 		calculateFromMeasurements();
 	}
 
