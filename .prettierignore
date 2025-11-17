@@ -1,3 +1,10 @@
+.svelte-kit
+node_modules
+build
+dist
+coverage
+package-lock.json
+.DS_Store
 # Package Managers
 package-lock.json
 pnpm-lock.yaml

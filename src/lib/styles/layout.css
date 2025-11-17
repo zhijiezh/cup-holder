@@ -1,0 +1,217 @@
+/* -----------------------------------------------------------------------------
+ * Layout Shell
+ * -------------------------------------------------------------------------- */
+
+.page-shell {
+	min-height: 100vh;
+	position: relative;
+	width: 100%;
+}
+
+.background-layer {
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	transition: background 0.3s ease;
+	background: var(--theme-background, #111111);
+}
+
+.background-layer::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background:
+		radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.08) 0%, transparent 50%),
+		radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.08) 0%, transparent 50%);
+	pointer-events: none;
+}
+
+/* -----------------------------------------------------------------------------
+ * App Grid
+ * -------------------------------------------------------------------------- */
+
+.app-container {
+	min-height: 100vh;
+	display: grid;
+	grid-template-areas:
+		'header'
+		'size'
+		'measurements'
+		'settings'
+		'main';
+	grid-template-columns: 1fr;
+	grid-template-rows: auto auto auto auto 1fr;
+	gap: var(--space-lg, 1.5rem);
+	padding: var(--layout-padding, var(--space-xl, 2rem));
+	position: relative;
+	overflow-x: hidden;
+	overflow-y: auto;
+	max-width: var(--layout-max-width, 1200px);
+	margin: 0 auto;
+	width: 100%;
+	box-sizing: border-box;
+	z-index: 1;
+}
+
+/* Content layering: allow model interactivity while text floats above */
+:where(.header, .size-display, .measurements, .settings-section) {
+	pointer-events: none;
+	position: relative;
+	z-index: 2;
+}
+
+:where(.header, .size-display, .measurements, .settings-section) * {
+	pointer-events: auto;
+}
+
+/* -----------------------------------------------------------------------------
+ * Sections
+ * -------------------------------------------------------------------------- */
+
+.header {
+	grid-area: header;
+}
+
+.title {
+	font-size: clamp(48px, 8vw, 128px);
+	font-weight: 700;
+	color: var(--theme-text-primary, #ffffff);
+	margin: 0;
+	line-height: 1.1;
+	text-shadow: var(--theme-text-shadow, 0 4px 20px rgba(0, 0, 0, 0.3));
+	letter-spacing: -0.02em;
+	white-space: nowrap;
+	overflow: visible;
+	word-break: keep-all;
+	transition:
+		color 0.3s ease,
+		text-shadow 0.3s ease;
+}
+
+.size-display {
+	grid-area: size;
+	display: flex;
+	justify-content: flex-start;
+	align-items: baseline;
+	flex-wrap: nowrap;
+	overflow: hidden;
+	gap: var(--space-md, 1rem);
+}
+
+.size-option {
+	display: flex;
+}
+
+.measurements {
+	grid-area: measurements;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-sm, 0.75rem);
+}
+
+.measurement-item {
+	display: flex;
+	align-items: baseline;
+	gap: 0;
+	font-size: 0.9375rem;
+	flex-wrap: nowrap;
+}
+
+.settings-section {
+	grid-area: settings;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-sm, 0.75rem);
+	align-items: flex-start;
+}
+
+/* -----------------------------------------------------------------------------
+ * Model Layer
+ * -------------------------------------------------------------------------- */
+
+.model-section {
+	grid-area: model;
+	position: fixed;
+	inset: 0;
+	min-height: 100vh;
+	height: 100vh;
+	width: 100vw;
+	margin: 0;
+	padding: 0;
+	overflow: visible;
+	pointer-events: none;
+	z-index: 1;
+}
+
+.model-section div {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: 120vw !important;
+	height: 120vh !important;
+	min-width: 100vw;
+	min-height: 100vh;
+	margin: 0;
+	padding: 0;
+	pointer-events: none;
+}
+
+.model-section canvas {
+	display: block !important;
+	width: 100% !important;
+	height: 100% !important;
+	background: transparent !important;
+	margin: 0;
+	padding: 0;
+	pointer-events: auto;
+	object-fit: cover;
+}
+
+/* -----------------------------------------------------------------------------
+ * Responsive
+ * -------------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+	.app-container {
+		grid-template-rows: min-content min-content min-content min-content 1fr;
+		padding: var(--space-md, 1rem);
+		gap: var(--space-xs, 0.5rem);
+	}
+
+	.app-container > *:not(.model-section) {
+		padding: var(--space-xs, 0.5rem) 0;
+	}
+
+	.header {
+		padding-top: max(var(--space-md, 1rem), var(--layout-safe-top, 44px));
+	}
+
+	.title {
+		font-size: clamp(48px, 12vw, 128px);
+	}
+
+	.measurement-item {
+		font-size: 0.875rem;
+	}
+
+	.settings-section {
+		gap: var(--space-xs, 0.5rem);
+	}
+
+	.model-section div {
+		top: 66.67%;
+		left: 0;
+		right: 0;
+		transform: translateY(-50%);
+		width: 100vw !important;
+		height: 96vh !important;
+		min-width: 100vw;
+		min-height: 96vh;
+	}
+
+	.model-section canvas {
+		position: absolute;
+		inset: 0;
+	}
+}

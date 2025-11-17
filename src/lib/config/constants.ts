@@ -1,3 +1,5 @@
+import type { ThemeName } from '../theme/themeConfig';
+
 /**
  * 应用常量配置
  */
@@ -21,7 +23,7 @@ export const DEFAULT_SIZES = {
 // export const CUP_OPTIONS: string[] = ['AA', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 
 // 主题选项
-export const THEME_OPTIONS: string[] = ['spongebob', 'barbie', 'toon', 'cyberpunk', 'alien'];
+export const THEME_OPTIONS: ThemeName[] = ['spongebob', 'barbie', 'toon', 'cyberpunk', 'alien'];
 
 // 地区选项
 export const REGION_OPTIONS: string[] = ['CN', 'US', 'US_CLASSIC', 'JP', 'UK'];
@@ -34,7 +36,7 @@ export const UNIT_OPTIONS: string[] = ['cm', 'inch'];
 
 // 默认设置
 export const DEFAULT_SETTINGS = {
-	THEME: 'toon' as const,
+	THEME: 'toon' as ThemeName,
 	REGION: 'CN' as const,
 	LANGUAGE: 'zh' as const,
 	UNIT: 'cm' as const
@@ -45,4 +47,3 @@ export const MODEL_UPDATE_DELAY = 100;
 
 // 主题切换延迟（毫秒）
 export const THEME_CHANGE_DELAY = 0;
-

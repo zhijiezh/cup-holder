@@ -2,7 +2,10 @@
 	import { createEventDispatcher } from 'svelte';
 	import { onMount } from 'svelte';
 
+	import { createComponentId } from '$lib/utils/id';
+
 	let {
+		id,
 		value = 0,
 		min = 0,
 		max = 100,
@@ -11,6 +14,7 @@
 		unit = '',
 		dragHint = '上下拖动'
 	}: {
+		id?: string;
 		value?: number;
 		min?: number;
 		max?: number;
@@ -21,32 +25,14 @@
 	} = $props();
 
 	const dispatch = createEventDispatcher();
+	const pickerId = id ?? createComponentId('number-picker');
+	const labelId = label ? `${pickerId}-label` : undefined;
 
 	let numberDisplayElement: HTMLDivElement;
 	// 触摸起始位置（X坐标，用于水平拖动）
 	let touchStartX = 0;
 	let touchStartValue = 0;
 	let isDragging = $state(false);
-
-	/**
-	 * 增加数值
-	 */
-	function increment() {
-		const newValue = Math.round(Math.min(value + step, max));
-		if (newValue !== value) {
-			dispatch('change', newValue);
-		}
-	}
-
-	/**
-	 * 减少数值
-	 */
-	function decrement() {
-		const newValue = Math.round(Math.max(value - step, min));
-		if (newValue !== value) {
-			dispatch('change', newValue);
-		}
-	}
 
 	/**
 	 * 格式化显示值
@@ -157,10 +143,10 @@
 			numberDisplayElement.addEventListener('touchstart', handleTouchStart, { passive: false });
 			numberDisplayElement.addEventListener('touchmove', handleTouchMove, { passive: false });
 			numberDisplayElement.addEventListener('touchend', handleTouchEnd, { passive: false });
-			
+
 			// 鼠标事件（桌面端）
 			numberDisplayElement.addEventListener('mousedown', handleMouseDown);
-			
+
 			// 滚轮事件
 			numberDisplayElement.addEventListener('wheel', handleWheel, { passive: false });
 
@@ -195,10 +181,11 @@
 
 <div class="number-picker-container">
 	{#if label}
-		<div class="number-picker-label">{label}</div>
+		<div class="number-picker-label form-label" id={labelId}>{label}</div>
 	{/if}
 	<div class="number-picker">
 		<div
+			id={pickerId}
 			bind:this={numberDisplayElement}
 			class="number-display"
 			class:dragging={isDragging}
@@ -206,10 +193,13 @@
 			aria-valuemin={min}
 			aria-valuemax={max}
 			aria-valuenow={value}
+			aria-labelledby={labelId}
+			aria-description={dragHint || undefined}
 		>
 			<div class="prev-value">{getPrevValue() !== null ? formatValue(getPrevValue()!) : ''}</div>
 			<div class="current-value">
-				{formatValue(value)} {unit}
+				{formatValue(value)}
+				{unit}
 			</div>
 			<div class="next-value">{getNextValue() !== null ? formatValue(getNextValue()!) : ''}</div>
 		</div>
@@ -227,7 +217,7 @@
 
 	.number-picker-label {
 		font-size: 0.875rem;
-		color: var(--text-color-secondary, rgba(255, 255, 255, 0.9));
+		color: var(--theme-text-secondary, rgba(255, 255, 255, 0.9));
 		font-weight: 500;
 		margin-bottom: 0;
 		min-width: 80px;
@@ -268,7 +258,7 @@
 	.next-value {
 		font-size: 1.25rem;
 		font-weight: 400;
-		color: var(--text-color-tertiary, rgba(255, 255, 255, 0.3));
+		color: var(--theme-text-tertiary, rgba(255, 255, 255, 0.3));
 		line-height: 1;
 		display: flex;
 		align-items: center;
@@ -280,15 +270,17 @@
 	.current-value {
 		font-size: 1.125rem;
 		font-weight: 600;
-		color: var(--text-color, white);
+		color: var(--theme-text-primary, white);
 		line-height: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		min-width: 60px;
 		text-align: center;
-		text-shadow: var(--text-shadow, 0 2px 10px rgba(0, 0, 0, 0.3));
-		transition: color 0.3s ease, text-shadow 0.3s ease;
+		text-shadow: var(--theme-text-shadow, 0 2px 10px rgba(0, 0, 0, 0.3));
+		transition:
+			color 0.3s ease,
+			text-shadow 0.3s ease;
 	}
 
 	/* 移动端优化 */
@@ -303,4 +295,3 @@
 		}
 	}
 </style>
-

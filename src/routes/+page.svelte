@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import ModelViewer from '$lib/ModelViewer.svelte';
-	import Picker from '$lib/Picker.svelte';
-	import NumberPicker from '$lib/NumberPicker.svelte';
+	import ModelViewer from '$lib/components/ModelViewer.svelte';
+	import Picker from '$lib/components/Picker.svelte';
+	import NumberPicker from '$lib/components/NumberPicker.svelte';
 	import { getTranslation, type Language, type Region, type Unit } from '$lib/i18n';
 	import {
 		calculateBraSize,
@@ -10,9 +10,8 @@
 		getBandOptions,
 		getCupOptions,
 		getRegionBrand,
-		cm,
-		type BraSize
-	} from '$lib/braSizeConverter';
+		cm
+	} from '$lib/logic/braSizeConverter';
 	import {
 		MEASUREMENT_RANGES,
 		DEFAULT_SIZES,
@@ -23,8 +22,9 @@
 		DEFAULT_SETTINGS,
 		MODEL_UPDATE_DELAY,
 		THEME_CHANGE_DELAY
-	} from '$lib/constants';
-	import { getThemeColors } from '$lib/themeConfig';
+	} from '$lib/config/constants';
+	import { settingsStore, type SettingsState } from '$lib/stores/settingsStore';
+	import { getThemeColors, buildThemeCssVariables, type ThemeName } from '$lib/theme/themeConfig';
 
 	// ============================================================================
 	// 状态管理
@@ -32,18 +32,29 @@
 
 	let language: Language = DEFAULT_SETTINGS.LANGUAGE;
 	let region: Region = DEFAULT_SETTINGS.REGION;
-	let currentTheme: string = DEFAULT_SETTINGS.THEME;
+	let currentTheme: ThemeName = DEFAULT_SETTINGS.THEME;
 	let unit: Unit = DEFAULT_SETTINGS.UNIT;
+	let settingsSnapshot: SettingsState = {
+		language,
+		region,
+		theme: currentTheme,
+		unit
+	};
+
+	$: settingsSnapshot = $settingsStore;
+	$: ({ language, region, unit, theme: currentTheme } = settingsSnapshot);
 	let modelViewer: ModelViewer;
+	let themeCssVariables: Record<string, string> = {};
+	let themeCssVarString = '';
 
 	// 测量值状态（内部始终使用 cm 存储）
 	let underbust: number = MEASUREMENT_RANGES.UNDERBUST_DEFAULT;
 	let bust: number = MEASUREMENT_RANGES.BUST_DEFAULT;
-	
+
 	// 计算上胸围的动态范围（基于下胸围）
 	$: bustMin = underbust;
 	$: bustMax = underbust + MEASUREMENT_RANGES.BUST_RANGE_OFFSET;
-	
+
 	// 尺码选择状态（根据地区初始化）
 	// 使用响应式语句确保 band 选项根据地区正确初始化
 	// 根据测量值范围动态生成 band 选项
@@ -66,7 +77,9 @@
 
 	// 主题颜色（根据当前主题动态计算）
 	$: themeColors = getThemeColors(currentTheme);
-	
+	$: themeCssVariables = buildThemeCssVariables(themeColors);
+	$: themeCssVarString = toCssVarString(themeCssVariables);
+
 	// 确保主题变化时，模型和背景同步更新
 	$: {
 		if (modelViewer && typeof modelViewer.setTheme === 'function') {
@@ -75,7 +88,7 @@
 				if (modelViewer && typeof modelViewer.setTheme === 'function') {
 					modelViewer.setTheme(currentTheme);
 				}
-			}, 0);
+			}, THEME_CHANGE_DELAY);
 		}
 	}
 
@@ -83,20 +96,26 @@
 	// 工具函数
 	// ============================================================================
 
+	function toCssVarString(vars: Record<string, string>): string {
+		return Object.entries(vars)
+			.map(([key, value]) => `${key}: ${value}`)
+			.join('; ');
+	}
+
 	// 动态生成 cup 选项（根据当前地区）
 	$: cupOptions = getCupOptions(region);
 
 	// 创建品牌映射
-	$: regionBrandMap = (() => {
-		const map: Record<string, string> = {};
-		for (const regionOption of REGION_OPTIONS) {
+	const regionBrandMap: Record<string, string> = REGION_OPTIONS.reduce(
+		(map, regionOption) => {
 			const brand = getRegionBrand(regionOption as Region);
 			if (brand) {
 				map[regionOption] = brand;
 			}
-		}
-		return map;
-	})();
+			return map;
+		},
+		{} as Record<string, string>
+	);
 
 	/**
 	 * 单位转换函数
@@ -235,7 +254,7 @@
 	 * 保持测量值不变，重新计算对应地区的尺码
 	 */
 	function handleRegionChange(event: CustomEvent<Region>) {
-		region = event.detail;
+		settingsStore.setRegion(event.detail);
 		calculateFromMeasurements();
 	}
 
@@ -243,20 +262,14 @@
 	 * 处理语言变化
 	 */
 	function handleLanguageChange(event: CustomEvent<Language>) {
-		language = event.detail;
+		settingsStore.setLanguage(event.detail);
 	}
 
 	/**
 	 * 处理主题变化
 	 */
-	function handleThemeChange(event: CustomEvent<string>) {
-		currentTheme = event.detail;
-		// 延迟执行，确保modelViewer已经初始化
-		setTimeout(() => {
-			if (modelViewer && typeof modelViewer.setTheme === 'function') {
-				modelViewer.setTheme(currentTheme);
-			}
-		}, THEME_CHANGE_DELAY);
+	function handleThemeChange(event: CustomEvent<ThemeName>) {
+		settingsStore.setTheme(event.detail);
 	}
 
 	/**
@@ -264,7 +277,7 @@
 	 * 单位变化时，保持内部 cm 值不变，只改变显示
 	 */
 	function handleUnitChange(event: CustomEvent<Unit>) {
-		unit = event.detail;
+		settingsStore.setUnit(event.detail);
 		// 不需要重新计算，因为内部值已经是 cm
 	}
 
@@ -287,32 +300,35 @@
 	});
 </script>
 
-<div class="background-layer" style="background: {themeColors.background}"></div>
-<div class="app-container" style="--text-color: {themeColors.textColor}; --text-shadow: {themeColors.textShadow}; --text-color-secondary: {themeColors.textColorSecondary}; --text-color-tertiary: {themeColors.textColorTertiary}">
-	<!-- 顶部标题 -->
-	<div class="header">
-		<h1 class="title">{t.title}</h1>
-	</div>
+<div class="page-shell" style={themeCssVarString}>
+	<div class="background-layer"></div>
+	<div class="app-container">
+		<!-- 顶部标题 -->
+		<div class="header">
+			<h1 class="title">{t.title}</h1>
+		</div>
 
-	<!-- 大号尺码显示 -->
-	<div class="size-display">
-		<Picker
-			options={bandOptions}
-			value={selectedBand}
-			label=""
-			size="large"
-			class="text-right"
-			on:change={(e) => handleBandChange(e)}
-		/>
-		<Picker
-			options={cupOptions}
-			value={selectedCup}
-			label=""
-			size="large"
-      className="text-left"
-			on:change={(e) => handleCupChange(e)}
-		/>
-	</div>
+		<!-- 大号尺码显示 -->
+		<div class="size-display">
+			<div class="size-option text-right">
+				<Picker
+					options={bandOptions}
+					value={selectedBand}
+					label=""
+					size="large"
+					on:change={handleBandChange}
+				/>
+			</div>
+			<div class="size-option text-left">
+				<Picker
+					options={cupOptions}
+					value={selectedCup}
+					label=""
+					size="large"
+					on:change={handleCupChange}
+				/>
+			</div>
+		</div>
 
 		<!-- 测量值显示（平行文字） -->
 		<div class="measurements">
@@ -323,9 +339,9 @@
 					max={bustMaxDisplay}
 					step={unit === 'inch' ? 1 : 0.5}
 					label={t.bust}
-					unit={unit}
+					{unit}
 					dragHint=""
-					on:change={(e) => handleBustChange(e)}
+					on:change={handleBustChange}
 				/>
 			</div>
 			<div class="measurement-item">
@@ -335,317 +351,49 @@
 					max={underbustMaxDisplay}
 					step={unit === 'inch' ? 1 : 1}
 					label={t.underbust}
-					unit={unit}
+					{unit}
 					dragHint=""
-					on:change={(e) => handleUnderbustChange(e)}
+					on:change={handleUnderbustChange}
 				/>
 			</div>
 		</div>
 
-	<!-- 设置区域（主题、语言、单位、地区） -->
-	<div class="settings-section">
-		<Picker
-			options={THEME_OPTIONS}
-			value={currentTheme}
-			label={t.theme}
-			displayMap={t.themes}
-			on:change={(e) => handleThemeChange(e)}
-		/>
-		<Picker
-			options={LANGUAGE_OPTIONS}
-			value={language}
-			label={t.language}
-			displayMap={t.languages}
-			on:change={(e) => handleLanguageChange(e)}
-		/>
-		<Picker
-			options={UNIT_OPTIONS}
-			value={unit}
-			label={t.unit}
-			displayMap={t.units}
-			on:change={(e) => handleUnitChange(e)}
-		/>
-		<Picker
-			options={REGION_OPTIONS}
-			value={region}
-			label={t.region}
-			displayMap={t.regions}
-			brandMap={regionBrandMap}
-			on:change={(e) => handleRegionChange(e)}
-		/>
-	</div>
+		<!-- 设置区域（主题、语言、单位、地区） -->
+		<div class="settings-section">
+			<Picker
+				options={THEME_OPTIONS}
+				value={currentTheme}
+				label={t.theme}
+				displayMap={t.themes}
+				on:change={handleThemeChange}
+			/>
+			<Picker
+				options={LANGUAGE_OPTIONS}
+				value={language}
+				label={t.language}
+				displayMap={t.languages}
+				on:change={handleLanguageChange}
+			/>
+			<Picker
+				options={UNIT_OPTIONS}
+				value={unit}
+				label={t.unit}
+				displayMap={t.units}
+				on:change={handleUnitChange}
+			/>
+			<Picker
+				options={REGION_OPTIONS}
+				value={region}
+				label={t.region}
+				displayMap={t.regions}
+				brandMap={regionBrandMap}
+				on:change={handleRegionChange}
+			/>
+		</div>
 
-	<!-- 3D模型 -->
-	<div class="model-section">
-		<ModelViewer bind:this={modelViewer} />
+		<!-- 3D模型 -->
+		<div class="model-section">
+			<ModelViewer bind:this={modelViewer} />
+		</div>
 	</div>
 </div>
-
-<style>
-	/* CSS 变量定义（默认值，会被内联样式覆盖） */
-	.app-container {
-		--text-color: #ffffff;
-		--text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-		--text-color-secondary: rgba(255, 255, 255, 0.7);
-		--text-color-tertiary: rgba(255, 255, 255, 0.5);
-	}
-
-	.background-layer {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		z-index: -1;
-		transition: background 0.3s ease;
-	}
-
-	.background-layer::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-			radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-		pointer-events: none;
-	}
-
-	.app-container {
-		min-height: 100vh;
-		display: grid;
-		grid-template-areas:
-			'header'
-			'size'
-			'measurements'
-			'settings'
-			'main';
-		grid-template-columns: 1fr;
-		grid-template-rows: auto auto auto auto 1fr;
-		gap: 1.5rem;
-		padding: 2rem;
-		position: relative;
-		overflow-x: hidden;
-		overflow-y: auto;
-		max-width: 1200px;
-		margin: 0 auto;
-		width: 100%;
-		box-sizing: border-box;
-		z-index: 1;
-	}
-
-
-	.header {
-		grid-area: header;
-		position: relative;
-		z-index: 2;
-		pointer-events: none; /* 不阻挡模型交互 */
-	}
-
-	.header :global(*) {
-		pointer-events: auto; /* 但文字本身可以选中 */
-	}
-
-	.title {
-		font-size: clamp(48px, 8vw, 128px);
-		font-weight: 700;
-		color: var(--text-color);
-		margin: 0;
-		line-height: 1.1;
-		text-shadow: var(--text-shadow);
-		letter-spacing: -0.02em;
-		white-space: nowrap;
-		overflow: visible;
-		word-break: keep-all;
-		transition: color 0.3s ease, text-shadow 0.3s ease;
-	}
-
-	.size-display {
-		grid-area: size;
-		display: flex;
-		justify-content: flex-start;
-		align-items: baseline;
-		position: relative;
-		z-index: 2;
-		flex-wrap: nowrap;
-		overflow: hidden;
-		pointer-events: none; /* 不阻挡模型交互 */
-	}
-
-	.size-display :global(*) {
-		pointer-events: auto; /* 但选择器可以交互 */
-	}
-
-	.measurements {
-		grid-area: measurements;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		position: relative;
-		z-index: 2;
-		pointer-events: none; /* 不阻挡模型交互 */
-	}
-
-	.measurements :global(*) {
-		pointer-events: auto; /* 但输入控件可以交互 */
-	}
-
-	.measurement-item {
-		display: flex;
-		align-items: baseline;
-		gap: 0;
-		font-size: 0.9375rem;
-		flex-wrap: nowrap;
-	}
-
-	.settings-section {
-		grid-area: settings;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		position: relative;
-		z-index: 2;
-		align-items: flex-start;
-		pointer-events: none; /* 不阻挡模型交互 */
-	}
-
-	.settings-section :global(*) {
-		pointer-events: auto; /* 但选择器可以交互 */
-	}
-
-	.model-section {
-		grid-area: model;
-		position: fixed;
-		top: 0;
-		right: 0;
-		bottom: 0;
-		left: 0;
-		min-height: 100vh;
-		height: 100vh;
-		width: 100vw;
-		margin: 0;
-		padding: 0;
-		overflow: visible;
-		pointer-events: none; /* 容器本身不阻挡，但canvas会 */
-		z-index: 1; /* 在背景上方，但在文字下方 */
-		/* 透明背景，让模型融入页面，像封面图 */
-	}
-
-	.model-section :global(div) {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		width: 120vw !important;
-		height: 120vh !important;
-		min-width: 100vw;
-		min-height: 100vh;
-		margin: 0;
-		padding: 0;
-		pointer-events: none;
-	}
-
-	.model-section :global(canvas) {
-		display: block !important;
-		width: 100% !important;
-		height: 100% !important;
-		background: transparent !important;
-		margin: 0;
-		padding: 0;
-		pointer-events: auto;
-		object-fit: cover;
-	}
-
-	/* 移动端布局 */
-	@media (max-width: 768px) {
-		.app-container {
-		grid-template-areas:
-			'header'
-			'size'
-			'measurements'
-			'settings'
-			'main';
-			grid-template-columns: 1fr;
-			grid-template-rows: min-content min-content min-content min-content 1fr;
-			padding: 1rem;
-			gap: 0.5rem;
-		}
-
-		.app-container > *:not(.model-section) {
-			padding: 0.5rem 0;
-		}
-
-		.header {
-			padding-top: max(1rem, env(safe-area-inset-top, 44px));
-		}
-
-		.title {
-			font-size: clamp(48px, 12vw, 128px);
-			line-height: 1.1;
-			white-space: nowrap;
-			overflow: visible;
-			word-break: keep-all;
-		}
-
-		.size-display {
-			justify-content: flex-start;
-			flex-wrap: nowrap;
-			overflow: hidden;
-		}
-
-		.measurement-item {
-			font-size: 0.875rem;
-			gap: 0;
-		}
-
-		.settings-section {
-			flex-direction: column;
-			gap: 0.5rem;
-		}
-
-		.model-section {
-			position: fixed;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
-			min-height: 100vh;
-			height: 100vh;
-			width: 100vw;
-			margin: 0;
-			padding: 0;
-			overflow: visible;
-		}
-
-		.model-section :global(div) {
-			position: absolute;
-			top: 66.67%;
-			left: 0;
-			right: 0;
-			transform: translateY(-50%);
-			width: 100vw !important;
-			height: 96vh !important;
-			min-width: 100vw;
-			min-height: 96vh;
-			margin: 0;
-			padding: 0;
-			pointer-events: none;
-		}
-
-		.model-section :global(canvas) {
-			width: 100% !important;
-			height: 100% !important;
-			margin: 0;
-			padding: 0;
-			pointer-events: auto;
-			object-fit: cover;
-			/* 确保canvas延伸到屏幕边缘，消除左侧缝隙 */
-			position: absolute;
-			left: 0;
-			right: 0;
-			top: 0;
-			bottom: 0;
-		}
-	}
-</style>

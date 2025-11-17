@@ -1,597 +1,671 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-    <title>统一模型 + 逆向求解 (v10 - 最终)</title>
-    <style>
-        /* 样式保持不变 */
-        body { margin: 0; background-color: #111; color: white; }
-        canvas { display: block; }
-        #controls {
-            position: absolute; top: 10px; left: 10px;
-            background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;
-            font-family: sans-serif;
-            min-width: 350px;
-        }
-        #controls label, #readouts div { 
-            display: block; margin: 10px; 
-        }
-        #readouts {
-            margin-top: 15px;
-            border-top: 1px solid #555;
-            padding-top: 10px;
-        }
-        #readouts div {
-            font-size: 1.1em;
-            color: #8f0; 
-        }
-        #debug-readout {
-            font-size: 0.8em; 
-            color: #aaa; 
-            line-height: 1.6;
-        }
-    </style>
-</head>
-<body>
+	<head>
+		<title>统一模型 + 逆向求解 (v10 - 最终)</title>
+		<style>
+			/* 样式保持不变 */
+			body {
+				margin: 0;
+				background-color: #111;
+				color: white;
+			}
+			canvas {
+				display: block;
+			}
+			#controls {
+				position: absolute;
+				top: 10px;
+				left: 10px;
+				background: rgba(0, 0, 0, 0.5);
+				padding: 10px;
+				border-radius: 5px;
+				font-family: sans-serif;
+				min-width: 350px;
+			}
+			#controls label,
+			#readouts div {
+				display: block;
+				margin: 10px;
+			}
+			#readouts {
+				margin-top: 15px;
+				border-top: 1px solid #555;
+				padding-top: 10px;
+			}
+			#readouts div {
+				font-size: 1.1em;
+				color: #8f0;
+			}
+			#debug-readout {
+				font-size: 0.8em;
+				color: #aaa;
+				line-height: 1.6;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="controls">
+			<label for="themeSelector">主题风格:</label>
+			<select id="themeSelector" style="width: 100%; padding: 5px; margin-bottom: 15px"></select>
 
-    <div id="controls">
-        <label for="themeSelector">主题风格:</label>
-        <select id="themeSelector" style="width: 100%; padding: 5px; margin-bottom: 15px;"></select>
+			<label for="underbust">下胸围 (cm): <span id="underbustValue">84</span></label>
+			<input type="range" id="underbust" min="30" max="200" value="84" step="1" />
 
-        <label for="underbust">下胸围 (cm): <span id="underbustValue">84</span></label>
-        <input type="range" id="underbust" min="30" max="200" value="84" step="1">
+			<label for="bustCirc">上胸围 (cm): <span id="bustCircValue">95.99</span></label>
+			<input type="range" id="bustCirc" min="84" max="284" value="95.99" step="0.01" />
 
-        <label for="bustCirc">上胸围 (cm): <span id="bustCircValue">95.99</span></label>
-        <input type="range" id="bustCirc" min="84" max="284" value="95.99" step="0.01">
+			<div id="readouts">
+				<div id="debug-readout">
+					<b>统一数学值:</b><br />
+					模式 = <span id="modeValue">...</span><br />
+					x = <span id="xValue">...</span>, y = <span id="yValue">...</span>, r_A =
+					<span id="r_AValue">...</span>
+					<br />
+					<b>引擎状态:</b> 求解 shape = <span id="shapeValue">...</span>
+				</div>
+			</div>
+		</div>
 
-        <div id="readouts">
-            <div id="debug-readout">
-                <b>统一数学值:</b><br>
-                模式 = <span id="modeValue">...</span><br>
-                x = <span id="xValue">...</span>, 
-                y = <span id="yValue">...</span>, 
-                r_A = <span id="r_AValue">...</span>
-                <br>
-                <b>引擎状态:</b> 求解 shape = <span id="shapeValue">...</span>
-            </div>
-        </div>
-    </div>
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://cdn.skypack.dev/three@0.136.0/build/three.module.js",
+					"three/controls/": "https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/",
+					"three/utils/": "https://cdn.skypack.dev/three@0.136.0/examples/jsm/utils/"
+				}
+			}
+		</script>
 
-    <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.skypack.dev/three@0.136.0/build/three.module.js",
-        "three/controls/": "https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/",
-        "three/utils/": "https://cdn.skypack.dev/three@0.136.0/examples/jsm/utils/"
-      }
-    }
-    </script>
+		<script type="module">
+			import * as THREE from 'three';
+			import { OrbitControls } from 'three/controls/OrbitControls.js';
+			import { mergeBufferGeometries } from 'three/utils/BufferGeometryUtils.js';
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/controls/OrbitControls.js';
-        import { mergeBufferGeometries } from 'three/utils/BufferGeometryUtils.js';
+			// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			// █   全局变量 & 状态管理
+			// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			let scene, camera, renderer, controls;
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // █   全局变量 & 状态管理
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        let scene, camera, renderer, controls;
+			const THEMES = {
+				spongebob: {
+					background: 0x87ceeb, // 天蓝色
+					type: 'standard',
+					structure: 'tri-part', // 三段式结构
+					proportions: { shirt: 0.1, pants: 0.2 },
+					body: { color: 0xffe44f, roughness: 0.8, metalness: 0.0 },
+					shirt: { color: 0xffffff, roughness: 0.9, metalness: 0.0 },
+					pants: { color: 0x966941, roughness: 0.9, metalness: 0.0 },
+					eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 },
+					pupil: { color: 0x000000, roughness: 0.0 },
+					eyebrow: { color: 0x000000, roughness: 0.8, angle: 0 }
+				},
+				barbie: {
+					background: 0xffc0cb, // 芭比粉色背景
+					type: 'standard',
+					structure: 'tri-part', // 三段式结构，可以分段穿衣服
+					proportions: { shirt: 0.2, pants: 0.3 },
+					body: { color: 0xffdab9, roughness: 0.8, metalness: 0.0 }, // 更白的肤色
+					shirt: { color: 0xff69b4, roughness: 0.9, metalness: 0.0 }, // 芭比粉上衣
+					pants: { color: 0xff1493, roughness: 0.9, metalness: 0.0 }, // 深粉色裤子
+					eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 }, // 白色眼球
+					pupil: { color: 0x000000, roughness: 0.0 }, // 黑色瞳仁
+					eyebrow: { color: 0x8b008b, roughness: 0.8, angle: 0.1 } // 深紫色眉毛
+				},
+				toon: {
+					background: 0xbde8ff, // 柔和天蓝
+					type: 'toon',
+					structure: 'tri-part', // 改为三段式
+					proportions: { shirt: 0.25, pants: 0.35 }, // 衬衫+裤子比例
+					body: { color: 0xffdab9 }, // 柔和肤色
+					shirt: { color: 0xffdab9 }, // 改为与身体相同的肤色，实现无衬衫效果
+					pants: { color: 0x4a6b96 }, // 牛仔蓝色
+					eye: { color: 0xffffff, roughness: 0.1 }, // 保持白色，但让它更光滑以区别于衬衫
+					pupil: { color: 0x222222 },
+					eyebrow: { color: 0x5c4033, angle: 0.2 }
+				},
+				cyberpunk: {
+					background: 0x12081a, // 深紫色
+					type: 'standard',
+					structure: 'tri-part',
+					proportions: { shirt: 0.3, pants: 0.25 },
+					body: { color: 0x333333, roughness: 0.4, metalness: 0.8 },
+					shirt: {
+						color: 0x222222,
+						roughness: 0.5,
+						metalness: 0.5,
+						emissive: 0xff00ff,
+						emissiveIntensity: 1.5
+					},
+					pants: {
+						color: 0x181818,
+						roughness: 0.8,
+						metalness: 0.2,
+						emissive: 0x00ffff,
+						emissiveIntensity: 1.5
+					},
+					eye: {
+						color: 0xffffff,
+						emissive: 0xff00ff,
+						roughness: 0.1,
+						metalness: 0.1,
+						emissiveIntensity: 2.5
+					},
+					pupil: { color: 0xff00ff, emissive: 0xff00ff, emissiveIntensity: 3.0 },
+					eyebrow: { color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 1.0, angle: -0.25 }
+				},
+				alien: {
+					background: 0x05020d, // 深空紫
+					type: 'standard',
+					structure: 'uni-body',
+					proportions: { shirt: 0, pants: 0 },
+					body: { color: 0x98fb98, roughness: 0.6, metalness: 0.1 }, // 浅绿色皮肤
+					eye: { color: 0x0a0a0a, roughness: 0.05, metalness: 1.0 }, // 乌黑发亮的眼睛
+					pupil: { color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 2.0 },
+					eyebrow: { color: 0x32cd32, roughness: 0.8, angle: 0.3 }
+				}
+			};
 
-        const THEMES = {
-            spongebob: {
-                background: 0x87ceeb, // 天蓝色
-                type: 'standard',
-                structure: 'tri-part', // 三段式结构
-                proportions: { shirt: 0.1, pants: 0.2 },
-                body: { color: 0xffe44f, roughness: 0.8, metalness: 0.0 },
-                shirt: { color: 0xffffff, roughness: 0.9, metalness: 0.0 },
-                pants: { color: 0x966941, roughness: 0.9, metalness: 0.0 },
-                eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 },
-                pupil: { color: 0x000000, roughness: 0.0 },
-                eyebrow: { color: 0x000000, roughness: 0.8, angle: 0 },
-            },
-            barbie: {
-                background: 0xffc0cb, // 芭比粉色背景
-                type: 'standard',
-                structure: 'tri-part', // 三段式结构，可以分段穿衣服
-                proportions: { shirt: 0.2, pants: 0.3 },
-                body: { color: 0xffdab9, roughness: 0.8, metalness: 0.0 }, // 更白的肤色
-                shirt: { color: 0xff69b4, roughness: 0.9, metalness: 0.0 }, // 芭比粉上衣
-                pants: { color: 0xff1493, roughness: 0.9, metalness: 0.0 }, // 深粉色裤子
-                eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 }, // 白色眼球
-                pupil: { color: 0x000000, roughness: 0.0 }, // 黑色瞳仁
-                eyebrow: { color: 0x8b008b, roughness: 0.8, angle: 0.1 }, // 深紫色眉毛
-            },
-            toon: {
-                background: 0xbde8ff, // 柔和天蓝
-                type: 'toon',
-                structure: 'tri-part', // 改为三段式
-                proportions: { shirt: 0.25, pants: 0.35 }, // 衬衫+裤子比例
-                body: { color: 0xffdab9 }, // 柔和肤色
-                shirt: { color: 0xffdab9 }, // 改为与身体相同的肤色，实现无衬衫效果
-                pants: { color: 0x4a6b96 }, // 牛仔蓝色
-                eye: { color: 0xffffff, roughness: 0.1 }, // 保持白色，但让它更光滑以区别于衬衫
-                pupil: { color: 0x222222 },
-                eyebrow: { color: 0x5c4033, angle: 0.2 },
-            },
-            cyberpunk: {
-                background: 0x12081a, // 深紫色
-                type: 'standard',
-                structure: 'tri-part',
-                proportions: { shirt: 0.3, pants: 0.25 },
-                body: { color: 0x333333, roughness: 0.4, metalness: 0.8 },
-                shirt: { color: 0x222222, roughness: 0.5, metalness: 0.5, emissive: 0xff00ff, emissiveIntensity: 1.5 },
-                pants: { color: 0x181818, roughness: 0.8, metalness: 0.2, emissive: 0x00ffff, emissiveIntensity: 1.5 },
-                eye: { color: 0xffffff, emissive: 0xff00ff, roughness: 0.1, metalness: 0.1, emissiveIntensity: 2.5 },
-                pupil: { color: 0xff00ff, emissive: 0xff00ff, emissiveIntensity: 3.0 },
-                eyebrow: { color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 1.0, angle: -0.25 },
-            },
-            alien: {
-                background: 0x05020d, // 深空紫
-                type: 'standard',
-                structure: 'uni-body',
-                proportions: { shirt: 0, pants: 0 },
-                body: { color: 0x98fb98, roughness: 0.6, metalness: 0.1 }, // 浅绿色皮肤
-                eye: { color: 0x0a0a0a, roughness: 0.05, metalness: 1.0 }, // 乌黑发亮的眼睛
-                pupil: { color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 2.0 },
-                eyebrow: { color: 0x32cd32, roughness: 0.8, angle: 0.3 },
-            }
-        };
+			const DOM = {
+				themeSelector: document.getElementById('themeSelector'),
+				underbustSlider: document.getElementById('underbust'),
+				bustCircSlider: document.getElementById('bustCirc'),
+				underbustValue: document.getElementById('underbustValue'),
+				bustCircValue: document.getElementById('bustCircValue'),
+				modeValue: document.getElementById('modeValue'),
+				xValue: document.getElementById('xValue'),
+				yValue: document.getElementById('yValue'),
+				r_AValue: document.getElementById('r_AValue'),
+				shapeValue: document.getElementById('shapeValue')
+			};
 
-        const DOM = {
-            themeSelector: document.getElementById('themeSelector'),
-            underbustSlider: document.getElementById('underbust'),
-            bustCircSlider: document.getElementById('bustCirc'),
-            underbustValue: document.getElementById('underbustValue'),
-            bustCircValue: document.getElementById('bustCircValue'),
-            modeValue: document.getElementById('modeValue'),
-            xValue: document.getElementById('xValue'),
-            yValue: document.getElementById('yValue'),
-            r_AValue: document.getElementById('r_AValue'),
-            shapeValue: document.getElementById('shapeValue'),
-        };
+			// 常量
+			const TORSO_HEIGHT = 40;
+			const BUST_Y_POS = TORSO_HEIGHT * 0.118; // 眼睛的基础Y轴位置
+			const PIECEWISE_THRESHOLD = 50;
+			const PI = Math.PI;
+			const PUPIL_RADIUS_FACTOR = 0.4; // 瞳仁半径相对于眼球半径的比例
+			const PUPIL_Z_OFFSET = 0.1; // 瞳仁在眼球前方的偏移量，防止Z-fighting
+			const EYEBROW_WIDTH_FACTOR = 1.8; // 眉毛宽度相对于眼球半径的比例
+			const EYEBROW_HEIGHT_FACTOR = 0.25; // 眉毛高度相对于其宽度的比例
+			const EYEBROW_Y_OFFSET_FACTOR = 1.6; // 眉毛在眼球上方的距离比例
+			const EYEBROW_Z_OFFSET = 0.2; // 眉毛在身体前方的偏移量
 
-        // 常量
-        const TORSO_HEIGHT = 40; 
-        const BUST_Y_POS = TORSO_HEIGHT * 0.118; // 眼睛的基础Y轴位置
-        const PIECEWISE_THRESHOLD = 50; 
-        const PI = Math.PI;
-        const PUPIL_RADIUS_FACTOR = 0.4; // 瞳仁半径相对于眼球半径的比例
-        const PUPIL_Z_OFFSET = 0.1; // 瞳仁在眼球前方的偏移量，防止Z-fighting
-        const EYEBROW_WIDTH_FACTOR = 1.8; // 眉毛宽度相对于眼球半径的比例
-        const EYEBROW_HEIGHT_FACTOR = 0.25; // 眉毛高度相对于其宽度的比例
-        const EYEBROW_Y_OFFSET_FACTOR = 1.6; // 眉毛在眼球上方的距离比例
-        const EYEBROW_Z_OFFSET = 0.2; // 眉毛在身体前方的偏移量
-        
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // █   1. 统一的几何引擎 (GEOMETRY_ENGINE)
-        // █ █ █   (v10 模型: c=x, r_hemi=x/2, 5x+...)  █ █ █
-        // █ █ █   视觉 和 数学 100% 统一            █ █ █
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        const GEOMETRY_ENGINE = {
-            
-            /**
-             * 1. 核心塑形函数 (视觉 + 数学)
-             * !! 关键改动: 统一 r_hemi = x/2 !!
-             */
-            getShapeParams: (shapeValue, x) => {
-                const r_hemi = x / 2; // "统一" 模型的底座半径
-                
-                if (shapeValue < PIECEWISE_THRESHOLD) {
-                    // --- 方案A: "球面被切" (c=x) ---
-                    const shapeNorm = shapeValue / PIECEWISE_THRESHOLD;
-                    const r_max = x * 100; // "很平"
-                    const r_min = r_hemi + 0.001; 
-                    const r_A = r_max * Math.pow(r_min / r_max, shapeNorm);
-                    const h = r_A - Math.sqrt(r_A * r_A - r_hemi * r_hemi);
-                    return { 
-                        mode: '球面 (c=x)', 
-                        r_A: r_A, h: h, y: 0, r_hemi: r_hemi 
-                    };
-                } else {
-                    // --- 方案B: "圆柱+半球" (c=x) ---
-                    const shapeNorm = (shapeValue - PIECEWISE_THRESHOLD) / (100 - PIECEWISE_THRESHOLD);
-                    // 移除 y_max 上限，让 y 直接与 shapeNorm 成正比
-                    const y = shapeNorm * x * 1.5;
-                    const h = y + r_hemi;
-                    return { 
-                        mode: '圆柱 (c=x)', 
-                        r_A: r_hemi, h: h, y: y, r_hemi: r_hemi 
-                    };
-                }
-            },
+			// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			// █   1. 统一的几何引擎 (GEOMETRY_ENGINE)
+			// █ █ █   (v10 模型: c=x, r_hemi=x/2, 5x+...)  █ █ █
+			// █ █ █   视觉 和 数学 100% 统一            █ █ █
+			// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			const GEOMETRY_ENGINE = {
+				/**
+				 * 1. 核心塑形函数 (视觉 + 数学)
+				 * !! 关键改动: 统一 r_hemi = x/2 !!
+				 */
+				getShapeParams: (shapeValue, x) => {
+					const r_hemi = x / 2; // "统一" 模型的底座半径
 
-            /**
-             * 3. 精确测量函数 (数学)
-             * !! 关键改动: 统一的 v10 公式 !!
-             */
-            calculateBustCircumference: (params, x) => {
-                if (params.y === 0) { // '球面被切'
-                    const { r_A, r_hemi } = params; // r_hemi = x/2
-                    // 您的公式 (A): 5x + (1 * 弧长)
-                    // 弧长 = 2 * r_A * asin( (x/2) / r_A ) = 2 * r_A * asin(r_hemi / r_A)
-                    const arcLength = 2 * r_A * Math.asin( r_hemi / r_A );
-                    return (5 * x) + arcLength; // 修正: 是 1 倍弧长
-                } else { // '圆柱+半球'
-                    const { y } = params;
-                    // 您的公式 (B): 5x + 2y + PI*x/2
-                    return (5 * x) + (2 * y) + (PI * x / 2);
-                }
-            }
-        };
+					if (shapeValue < PIECEWISE_THRESHOLD) {
+						// --- 方案A: "球面被切" (c=x) ---
+						const shapeNorm = shapeValue / PIECEWISE_THRESHOLD;
+						const r_max = x * 100; // "很平"
+						const r_min = r_hemi + 0.001;
+						const r_A = r_max * Math.pow(r_min / r_max, shapeNorm);
+						const h = r_A - Math.sqrt(r_A * r_A - r_hemi * r_hemi);
+						return {
+							mode: '球面 (c=x)',
+							r_A: r_A,
+							h: h,
+							y: 0,
+							r_hemi: r_hemi
+						};
+					} else {
+						// --- 方案B: "圆柱+半球" (c=x) ---
+						const shapeNorm = (shapeValue - PIECEWISE_THRESHOLD) / (100 - PIECEWISE_THRESHOLD);
+						// 移除 y_max 上限，让 y 直接与 shapeNorm 成正比
+						const y = shapeNorm * x * 1.5;
+						const h = y + r_hemi;
+						return {
+							mode: '圆柱 (c=x)',
+							r_A: r_hemi,
+							h: h,
+							y: y,
+							r_hemi: r_hemi
+						};
+					}
+				},
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // █   2. 求解器 (SOLVER)
-        // █ █ █   (与 v9 相同, 但现在调用统一的引擎) █ █ █
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        const SOLVER = {
-            findShapeForCirc: (targetCirc, x) => {
-                // 1. 首先检查目标值是否在 0-100 的标准范围内
-                const params100 = GEOMETRY_ENGINE.getShapeParams(100, x);
-                const circAt100 = GEOMETRY_ENGINE.calculateBustCircumference(params100, x);
+				/**
+				 * 3. 精确测量函数 (数学)
+				 * !! 关键改动: 统一的 v10 公式 !!
+				 */
+				calculateBustCircumference: (params, x) => {
+					if (params.y === 0) {
+						// '球面被切'
+						const { r_A, r_hemi } = params; // r_hemi = x/2
+						// 您的公式 (A): 5x + (1 * 弧长)
+						// 弧长 = 2 * r_A * asin( (x/2) / r_A ) = 2 * r_A * asin(r_hemi / r_A)
+						const arcLength = 2 * r_A * Math.asin(r_hemi / r_A);
+						return 5 * x + arcLength; // 修正: 是 1 倍弧长
+					} else {
+						// '圆柱+半球'
+						const { y } = params;
+						// 您的公式 (B): 5x + 2y + PI*x/2
+						return 5 * x + 2 * y + (PI * x) / 2;
+					}
+				}
+			};
 
-                if (targetCirc <= circAt100) {
-                    // a. 如果在范围内，使用二分查找，精准高效
-                    let minShape = 0;
-                    let maxShape = 100;
-                    for (let i = 0; i < 15; i++) {
-                        const midShape = (minShape + maxShape) / 2;
-                        const params = GEOMETRY_ENGINE.getShapeParams(midShape, x);
-                        const currentCirc = GEOMETRY_ENGINE.calculateBustCircumference(params, x);
-                        if (currentCirc < targetCirc) minShape = midShape;
-                        else maxShape = midShape;
-                    }
-                    return (minShape + maxShape) / 2;
-                } else {
-                    // b. 如果超出范围，直接通过数学公式反向求解 shape > 100 的值
-                    // 公式: circ = (5*x) + (2*y) + (PI*x/2)  且  y = ((shape-50)/50) * x * 1.5
-                    // 联立求解 shape:
-                    const y_target = (targetCirc - (5 * x) - (PI * x / 2)) / 2;
-                    const shapeNorm_target = y_target / (x * 1.5);
-                    const shape_target = shapeNorm_target * 50 + 50;
-                    return shape_target;
-                }
-            }
-        };
-        
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // █   3. 应用主类 (ThreeApp)
-        // █ █ █   封装所有状态和逻辑，为React集成做准备 █ █ █
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        class ThreeApp {
-            constructor() {
-                /**
-                 * @property {Object<string, THREE.Mesh|THREE.Group>} meshes - 统一管理场景中所有网格对象
-                 * @property {Object<string, THREE.Material>} materials - 统一管理所有材质
-                 * @property {string} currentThemeName - 当前激活的主题名称
-                 * @property {Object} appState - 存储应用的核心状态数据
-                 */
-                this.meshes = {};
-                this.materials = {};
-                this.currentThemeName = 'spongebob';
-                this.appState = {
-                    underbust: 84,
-                    targetBust: 95.99,
-                    foundShape: 0,
-                };
+			// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			// █   2. 求解器 (SOLVER)
+			// █ █ █   (与 v9 相同, 但现在调用统一的引擎) █ █ █
+			// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			const SOLVER = {
+				findShapeForCirc: (targetCirc, x) => {
+					// 1. 首先检查目标值是否在 0-100 的标准范围内
+					const params100 = GEOMETRY_ENGINE.getShapeParams(100, x);
+					const circAt100 = GEOMETRY_ENGINE.calculateBustCircumference(params100, x);
 
-                this._setupScene();
-                this.setTheme(this.currentThemeName, true); // isInitial=true
-                this._setupGeometry();
-                this._setupEventListeners();
-                this.updateApp();
-                this._animate();
-            }
+					if (targetCirc <= circAt100) {
+						// a. 如果在范围内，使用二分查找，精准高效
+						let minShape = 0;
+						let maxShape = 100;
+						for (let i = 0; i < 15; i++) {
+							const midShape = (minShape + maxShape) / 2;
+							const params = GEOMETRY_ENGINE.getShapeParams(midShape, x);
+							const currentCirc = GEOMETRY_ENGINE.calculateBustCircumference(params, x);
+							if (currentCirc < targetCirc) minShape = midShape;
+							else maxShape = midShape;
+						}
+						return (minShape + maxShape) / 2;
+					} else {
+						// b. 如果超出范围，直接通过数学公式反向求解 shape > 100 的值
+						// 公式: circ = (5*x) + (2*y) + (PI*x/2)  且  y = ((shape-50)/50) * x * 1.5
+						// 联立求解 shape:
+						const y_target = (targetCirc - 5 * x - (PI * x) / 2) / 2;
+						const shapeNorm_target = y_target / (x * 1.5);
+						const shape_target = shapeNorm_target * 50 + 50;
+						return shape_target;
+					}
+				}
+			};
 
-            // --- 主流程 ---
-            /**
-             * 应用的主更新函数，作为所有更新的入口点。
-             * 流程: 读取UI -> 更新3D几何体 -> 更新UI显示
-             */
-            updateApp() {
-                this._updateStateFromUI();
-                const params = this._updateGeometries();
-                this._updateUIDisplay(params);
-            }
+			// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			// █   3. 应用主类 (ThreeApp)
+			// █ █ █   封装所有状态和逻辑，为React集成做准备 █ █ █
+			// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			class ThreeApp {
+				constructor() {
+					/**
+					 * @property {Object<string, THREE.Mesh|THREE.Group>} meshes - 统一管理场景中所有网格对象
+					 * @property {Object<string, THREE.Material>} materials - 统一管理所有材质
+					 * @property {string} currentThemeName - 当前激活的主题名称
+					 * @property {Object} appState - 存储应用的核心状态数据
+					 */
+					this.meshes = {};
+					this.materials = {};
+					this.currentThemeName = 'spongebob';
+					this.appState = {
+						underbust: 84,
+						targetBust: 95.99,
+						foundShape: 0
+					};
 
-            /**
-             * 设置并应用一个新主题。
-             * @param {string} themeName - 要应用的主题名称 (来自 THEMES 对象)。
-             * @param {boolean} [isInitial=false] - 是否为首次加载时的设置。
-             */
-            setTheme(themeName, isInitial = false) {
-                this.currentThemeName = themeName;
-                const theme = THEMES[themeName] || THEMES.spongebob;
-                this._setupMaterials(theme);
-                this._setupLighting(theme);
-                this.scene.background = new THREE.Color(theme.background);
+					this._setupScene();
+					this.setTheme(this.currentThemeName, true); // isInitial=true
+					this._setupGeometry();
+					this._setupEventListeners();
+					this.updateApp();
+					this._animate();
+				}
 
-                // 如果不是首次加载（即用户通过UI切换主题），则需要应用新材质并强制刷新
-                if (!isInitial) {
-                    this._applyMaterials();
-                    this._updateVisibility();
-                    this.updateApp();
-                }
-            }
+				// --- 主流程 ---
+				/**
+				 * 应用的主更新函数，作为所有更新的入口点。
+				 * 流程: 读取UI -> 更新3D几何体 -> 更新UI显示
+				 */
+				updateApp() {
+					this._updateStateFromUI();
+					const params = this._updateGeometries();
+					this._updateUIDisplay(params);
+				}
 
-            // --- 私有设置方法 ---
-            /**
-             * 初始化场景、相机、渲染器和轨道控制器。
-             */
-            _setupScene() {
-                this.scene = new THREE.Scene();
-                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                this.camera.position.set(0, TORSO_HEIGHT * 0.5, 40);
+				/**
+				 * 设置并应用一个新主题。
+				 * @param {string} themeName - 要应用的主题名称 (来自 THEMES 对象)。
+				 * @param {boolean} [isInitial=false] - 是否为首次加载时的设置。
+				 */
+				setTheme(themeName, isInitial = false) {
+					this.currentThemeName = themeName;
+					const theme = THEMES[themeName] || THEMES.spongebob;
+					this._setupMaterials(theme);
+					this._setupLighting(theme);
+					this.scene.background = new THREE.Color(theme.background);
 
-                this.renderer = new THREE.WebGLRenderer({ antialias: true });
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
-                document.body.appendChild(this.renderer.domElement);
+					// 如果不是首次加载（即用户通过UI切换主题），则需要应用新材质并强制刷新
+					if (!isInitial) {
+						this._applyMaterials();
+						this._updateVisibility();
+						this.updateApp();
+					}
+				}
 
-                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-                this.controls.target.set(0, BUST_Y_POS, 0);
-            }
+				// --- 私有设置方法 ---
+				/**
+				 * 初始化场景、相机、渲染器和轨道控制器。
+				 */
+				_setupScene() {
+					this.scene = new THREE.Scene();
+					this.camera = new THREE.PerspectiveCamera(
+						75,
+						window.innerWidth / window.innerHeight,
+						0.1,
+						1000
+					);
+					this.camera.position.set(0, TORSO_HEIGHT * 0.5, 40);
 
-            /**
-             * 创建所有几何体对象(Mesh)和组(Group)，并将它们添加到场景中。
-             */
-            _setupGeometry() {
-                const boxGeo = new THREE.BoxGeometry(1, 1, 1, 1, 1, 1);
-                this.meshes.torsoTop = new THREE.Mesh(boxGeo, this.materials.body);
-                this.meshes.torsoShirt = new THREE.Mesh(boxGeo, this.materials.shirt);
-                this.meshes.torsoPants = new THREE.Mesh(boxGeo, this.materials.pants);
+					this.renderer = new THREE.WebGLRenderer({ antialias: true });
+					this.renderer.setSize(window.innerWidth, window.innerHeight);
+					document.body.appendChild(this.renderer.domElement);
 
-                this.meshes.leftEyeGroup = new THREE.Group();
-                this.meshes.rightEyeGroup = new THREE.Group();
-                this.meshes.leftEyeball = new THREE.Mesh(new THREE.BufferGeometry(), this.materials.eye);
-                this.meshes.rightEyeball = new THREE.Mesh(new THREE.BufferGeometry(), this.materials.eye);
-                this.meshes.leftPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
-                this.meshes.rightPupil = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.pupil);
-                this.meshes.leftPupil.renderOrder = 1;
-                this.meshes.rightPupil.renderOrder = 1;
+					this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+					this.controls.target.set(0, BUST_Y_POS, 0);
+				}
 
-                this.meshes.leftEyebrow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.materials.eyebrow);
-                this.meshes.rightEyebrow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.materials.eyebrow);
+				/**
+				 * 创建所有几何体对象(Mesh)和组(Group)，并将它们添加到场景中。
+				 */
+				_setupGeometry() {
+					const boxGeo = new THREE.BoxGeometry(1, 1, 1, 1, 1, 1);
+					this.meshes.torsoTop = new THREE.Mesh(boxGeo, this.materials.body);
+					this.meshes.torsoShirt = new THREE.Mesh(boxGeo, this.materials.shirt);
+					this.meshes.torsoPants = new THREE.Mesh(boxGeo, this.materials.pants);
 
-                this.meshes.leftEyeGroup.add(this.meshes.leftEyeball, this.meshes.leftPupil, this.meshes.leftEyebrow);
-                this.meshes.rightEyeGroup.add(this.meshes.rightEyeball, this.meshes.rightPupil, this.meshes.rightEyebrow);
+					this.meshes.leftEyeGroup = new THREE.Group();
+					this.meshes.rightEyeGroup = new THREE.Group();
+					this.meshes.leftEyeball = new THREE.Mesh(new THREE.BufferGeometry(), this.materials.eye);
+					this.meshes.rightEyeball = new THREE.Mesh(new THREE.BufferGeometry(), this.materials.eye);
+					this.meshes.leftPupil = new THREE.Mesh(
+						new THREE.CircleGeometry(1, 16),
+						this.materials.pupil
+					);
+					this.meshes.rightPupil = new THREE.Mesh(
+						new THREE.CircleGeometry(1, 16),
+						this.materials.pupil
+					);
+					this.meshes.leftPupil.renderOrder = 1;
+					this.meshes.rightPupil.renderOrder = 1;
 
-                this.scene.add(
-                    this.meshes.torsoTop, this.meshes.torsoShirt, this.meshes.torsoPants,
-                    this.meshes.leftEyeGroup, this.meshes.rightEyeGroup
-                );
-                this._updateVisibility();
-            }
+					this.meshes.leftEyebrow = new THREE.Mesh(
+						new THREE.PlaneGeometry(1, 1),
+						this.materials.eyebrow
+					);
+					this.meshes.rightEyebrow = new THREE.Mesh(
+						new THREE.PlaneGeometry(1, 1),
+						this.materials.eyebrow
+					);
 
-            /**
-             * 设置所有DOM元素的事件监听器，包括主题切换和滑块输入。
-             */
-            _setupEventListeners() {
-                const themeSelector = DOM.themeSelector;
-                for (const themeName in THEMES) {
-                    const option = document.createElement('option');
-                    option.value = themeName;
-                    option.textContent = themeName.charAt(0).toUpperCase() + themeName.slice(1);
-                    themeSelector.appendChild(option);
-                }
-                themeSelector.value = this.currentThemeName;
-                themeSelector.addEventListener('change', (event) => this.setTheme(event.target.value));
-                DOM.underbustSlider.addEventListener('input', () => this.updateApp());
-                DOM.bustCircSlider.addEventListener('input', () => this.updateApp());
-                window.addEventListener('resize', () => this._onWindowResize());
-            }
+					this.meshes.leftEyeGroup.add(
+						this.meshes.leftEyeball,
+						this.meshes.leftPupil,
+						this.meshes.leftEyebrow
+					);
+					this.meshes.rightEyeGroup.add(
+						this.meshes.rightEyeball,
+						this.meshes.rightPupil,
+						this.meshes.rightEyebrow
+					);
 
-            // --- 私有更新方法 ---
-            /**
-             * 从UI滑块读取输入值，更新appState，并运行求解器找到当前的shape值。
-             */
-            _updateStateFromUI() {
-                this.appState.underbust = parseFloat(DOM.underbustSlider.value);
-                const minBust = this.appState.underbust;
-                const maxBust = this.appState.underbust + 200;
-                DOM.bustCircSlider.min = minBust.toFixed(2);
-                DOM.bustCircSlider.max = maxBust.toFixed(2);
-                let targetBust = parseFloat(DOM.bustCircSlider.value);
-                this.appState.targetBust = Math.max(minBust, Math.min(targetBust, maxBust));
-                const x = this.appState.underbust / 6.0;
-                this.appState.foundShape = SOLVER.findShapeForCirc(this.appState.targetBust, x);
-            }
+					this.scene.add(
+						this.meshes.torsoTop,
+						this.meshes.torsoShirt,
+						this.meshes.torsoPants,
+						this.meshes.leftEyeGroup,
+						this.meshes.rightEyeGroup
+					);
+					this._updateVisibility();
+				}
 
-            /**
-             * 根据当前appState中的参数，更新所有3D几何体的尺寸和位置。
-             */
-            _updateGeometries() {
-                const x = this.appState.underbust / 6.0;
-                const width = 2 * x;
-                const halfDepth = x / 2;
-                const params = GEOMETRY_ENGINE.getShapeParams(this.appState.foundShape, x);
+				/**
+				 * 设置所有DOM元素的事件监听器，包括主题切换和滑块输入。
+				 */
+				_setupEventListeners() {
+					const themeSelector = DOM.themeSelector;
+					for (const themeName in THEMES) {
+						const option = document.createElement('option');
+						option.value = themeName;
+						option.textContent = themeName.charAt(0).toUpperCase() + themeName.slice(1);
+						themeSelector.appendChild(option);
+					}
+					themeSelector.value = this.currentThemeName;
+					themeSelector.addEventListener('change', (event) => this.setTheme(event.target.value));
+					DOM.underbustSlider.addEventListener('input', () => this.updateApp());
+					DOM.bustCircSlider.addEventListener('input', () => this.updateApp());
+					window.addEventListener('resize', () => this._onWindowResize());
+				}
 
-                this._updateEyeballGeometry(params);
-                this._updatePupilGeometry(params);
-                this._updateEyebrowGeometry(params);
-                this._updateTorsoAppearance(width, x);
+				// --- 私有更新方法 ---
+				/**
+				 * 从UI滑块读取输入值，更新appState，并运行求解器找到当前的shape值。
+				 */
+				_updateStateFromUI() {
+					this.appState.underbust = parseFloat(DOM.underbustSlider.value);
+					const minBust = this.appState.underbust;
+					const maxBust = this.appState.underbust + 200;
+					DOM.bustCircSlider.min = minBust.toFixed(2);
+					DOM.bustCircSlider.max = maxBust.toFixed(2);
+					let targetBust = parseFloat(DOM.bustCircSlider.value);
+					this.appState.targetBust = Math.max(minBust, Math.min(targetBust, maxBust));
+					const x = this.appState.underbust / 6.0;
+					this.appState.foundShape = SOLVER.findShapeForCirc(this.appState.targetBust, x);
+				}
 
-                const BUST_X_POS = width * 0.25;
-                const eyeGroupZOffset = halfDepth + 0.05; 
-                this.meshes.leftEyeGroup.position.set(-BUST_X_POS, BUST_Y_POS, eyeGroupZOffset);
-                this.meshes.rightEyeGroup.position.set(BUST_X_POS, BUST_Y_POS, eyeGroupZOffset);
-                return params;
-            }
-            
-            /**
-             * 辅助函数：根据参数重建眼球的几何体。
-             * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
-             */
-            _updateEyeballGeometry(params) {
-                let bustGeo;
-                if (params.mode === '圆柱 (c=x)') {
-                    const { y, r_hemi } = params;
-                    const cylinderGeo = new THREE.CylinderGeometry(r_hemi, r_hemi, y, 24, 1);
-                    const sphereGeo = new THREE.SphereGeometry(r_hemi, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
-                    cylinderGeo.translate(0, y / 2, 0);
-                    sphereGeo.translate(0, y, 0);
-                    bustGeo = mergeBufferGeometries([cylinderGeo, sphereGeo]);
-                    bustGeo.rotateX(Math.PI / 2);
-                } else {
-                    const { r_A, r_hemi, h } = params;
-                    const thetaLength = Math.asin(r_hemi / r_A); // 计算球帽顶角
-                    bustGeo = new THREE.SphereGeometry(r_A, 24, 12, 0, Math.PI * 2, 0, thetaLength);
-                    bustGeo.rotateX(Math.PI / 2);
-                    bustGeo.translate(0, 0, -(r_A - h));
-                }
-                this.meshes.leftEyeball.geometry.dispose();
-                this.meshes.rightEyeball.geometry.dispose();
-                this.meshes.leftEyeball.geometry = bustGeo;
-                this.meshes.rightEyeball.geometry = bustGeo.clone();
-            }
+				/**
+				 * 根据当前appState中的参数，更新所有3D几何体的尺寸和位置。
+				 */
+				_updateGeometries() {
+					const x = this.appState.underbust / 6.0;
+					const width = 2 * x;
+					const halfDepth = x / 2;
+					const params = GEOMETRY_ENGINE.getShapeParams(this.appState.foundShape, x);
 
-            /**
-             * 辅助函数：根据参数更新瞳仁的大小和位置。
-             * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
-             */
-            _updatePupilGeometry(params) {
-                const pupilRadius = params.r_hemi * PUPIL_RADIUS_FACTOR;
-                this.meshes.leftPupil.scale.set(pupilRadius, pupilRadius, 1);
-                this.meshes.rightPupil.scale.set(pupilRadius, pupilRadius, 1);
-                const pupilZOffset = params.h + PUPIL_Z_OFFSET;
-                this.meshes.leftPupil.position.z = pupilZOffset;
-                this.meshes.rightPupil.position.z = pupilZOffset;
-            }
+					this._updateEyeballGeometry(params);
+					this._updatePupilGeometry(params);
+					this._updateEyebrowGeometry(params);
+					this._updateTorsoAppearance(width, x);
 
-            /**
-             * 辅助函数：根据参数更新眉毛的大小和位置。
-             * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
-             */
-            _updateEyebrowGeometry(params) {
-                const eyebrowWidth = params.r_hemi * EYEBROW_WIDTH_FACTOR;
-                const eyebrowHeight = eyebrowWidth * EYEBROW_HEIGHT_FACTOR;
-                this.meshes.leftEyebrow.scale.set(eyebrowWidth, eyebrowHeight, 1);
-                this.meshes.rightEyebrow.scale.set(eyebrowWidth, eyebrowHeight, 1);
+					const BUST_X_POS = width * 0.25;
+					const eyeGroupZOffset = halfDepth + 0.05;
+					this.meshes.leftEyeGroup.position.set(-BUST_X_POS, BUST_Y_POS, eyeGroupZOffset);
+					this.meshes.rightEyeGroup.position.set(BUST_X_POS, BUST_Y_POS, eyeGroupZOffset);
+					return params;
+				}
 
-                const eyebrowYOffset = params.r_hemi * EYEBROW_Y_OFFSET_FACTOR;
-                this.meshes.leftEyebrow.position.y = eyebrowYOffset;
-                this.meshes.rightEyebrow.position.y = eyebrowYOffset;
+				/**
+				 * 辅助函数：根据参数重建眼球的几何体。
+				 * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
+				 */
+				_updateEyeballGeometry(params) {
+					let bustGeo;
+					if (params.mode === '圆柱 (c=x)') {
+						const { y, r_hemi } = params;
+						const cylinderGeo = new THREE.CylinderGeometry(r_hemi, r_hemi, y, 24, 1);
+						const sphereGeo = new THREE.SphereGeometry(
+							r_hemi,
+							24,
+							12,
+							0,
+							Math.PI * 2,
+							0,
+							Math.PI / 2
+						);
+						cylinderGeo.translate(0, y / 2, 0);
+						sphereGeo.translate(0, y, 0);
+						bustGeo = mergeBufferGeometries([cylinderGeo, sphereGeo]);
+						bustGeo.rotateX(Math.PI / 2);
+					} else {
+						const { r_A, r_hemi, h } = params;
+						const thetaLength = Math.asin(r_hemi / r_A); // 计算球帽顶角
+						bustGeo = new THREE.SphereGeometry(r_A, 24, 12, 0, Math.PI * 2, 0, thetaLength);
+						bustGeo.rotateX(Math.PI / 2);
+						bustGeo.translate(0, 0, -(r_A - h));
+					}
+					this.meshes.leftEyeball.geometry.dispose();
+					this.meshes.rightEyeball.geometry.dispose();
+					this.meshes.leftEyeball.geometry = bustGeo;
+					this.meshes.rightEyeball.geometry = bustGeo.clone();
+				}
 
-                this.meshes.leftEyebrow.position.z = EYEBROW_Z_OFFSET;
-                this.meshes.rightEyebrow.position.z = EYEBROW_Z_OFFSET;
+				/**
+				 * 辅助函数：根据参数更新瞳仁的大小和位置。
+				 * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
+				 */
+				_updatePupilGeometry(params) {
+					const pupilRadius = params.r_hemi * PUPIL_RADIUS_FACTOR;
+					this.meshes.leftPupil.scale.set(pupilRadius, pupilRadius, 1);
+					this.meshes.rightPupil.scale.set(pupilRadius, pupilRadius, 1);
+					const pupilZOffset = params.h + PUPIL_Z_OFFSET;
+					this.meshes.leftPupil.position.z = pupilZOffset;
+					this.meshes.rightPupil.position.z = pupilZOffset;
+				}
 
-                const theme = THEMES[this.currentThemeName];
-                this.meshes.leftEyebrow.rotation.z = theme.eyebrow.angle || 0;
-                this.meshes.rightEyebrow.rotation.z = -(theme.eyebrow.angle || 0);
-            }
+				/**
+				 * 辅助函数：根据参数更新眉毛的大小和位置。
+				 * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
+				 */
+				_updateEyebrowGeometry(params) {
+					const eyebrowWidth = params.r_hemi * EYEBROW_WIDTH_FACTOR;
+					const eyebrowHeight = eyebrowWidth * EYEBROW_HEIGHT_FACTOR;
+					this.meshes.leftEyebrow.scale.set(eyebrowWidth, eyebrowHeight, 1);
+					this.meshes.rightEyebrow.scale.set(eyebrowWidth, eyebrowHeight, 1);
 
-            /**
-             * 根据计算结果更新页面上所有的调试信息文本。
-             * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
-             */
-            _updateUIDisplay(params) {
-                DOM.underbustValue.textContent = this.appState.underbust.toFixed(0);
-                DOM.bustCircValue.textContent = this.appState.targetBust.toFixed(2);
-                DOM.modeValue.textContent = params.mode;
-                DOM.xValue.textContent = (this.appState.underbust / 6.0).toFixed(2);
-                DOM.yValue.textContent = params.y.toFixed(2);
-                DOM.r_AValue.textContent = params.r_A.toFixed(2);
-                DOM.shapeValue.textContent = this.appState.foundShape.toFixed(2);
-            }
+					const eyebrowYOffset = params.r_hemi * EYEBROW_Y_OFFSET_FACTOR;
+					this.meshes.leftEyebrow.position.y = eyebrowYOffset;
+					this.meshes.rightEyebrow.position.y = eyebrowYOffset;
 
-            // --- 主题与外观管理 ---
-            /**
-             * 根据主题定义，创建所有需要的材质实例。
-             * @param {Object} theme - 当前的主题对象。
-             */
-            _setupMaterials(theme) {
-                for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil', 'eyebrow']) {
-                    if (theme[key]) {
-                        const { angle, ...materialProps } = { ...theme[key] };
-                        const MaterialClass = THREE.MeshStandardMaterial;
+					this.meshes.leftEyebrow.position.z = EYEBROW_Z_OFFSET;
+					this.meshes.rightEyebrow.position.z = EYEBROW_Z_OFFSET;
 
-                        if (key === 'pupil') {
-                            materialProps.side = THREE.DoubleSide;
-                            materialProps.depthTest = false;
-                        }
-                        this.materials[key] = new MaterialClass(materialProps);
-                    }
-                }
-            }
-            /**
-             * 根据主题类型，设置场景的灯光。
-             * @param {Object} theme - 当前的主题对象。
-             */
-            _setupLighting(theme) {
-                this.scene.children.filter(obj => obj.isLight).forEach(light => this.scene.remove(light));
-                if (theme.type === 'toon') {
-                    const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2.5);
-                    light.position.set(0, 100, 0);
-                    this.scene.add(light);
-                } else {
-                    const ambient = new THREE.AmbientLight(0x404040, 2);
-                    const light = new THREE.DirectionalLight(0xffffff, 2);
-                    light.position.set(10, 30, 50);
-                    this.scene.add(ambient, light);
-                }
-            }
-            /**
-             * 将当前材质应用到所有对应的网格上。
-             */
-            _applyMaterials() {
-                this.meshes.torsoTop.material = this.materials.body;
-                this.meshes.torsoShirt.material = this.materials.shirt;
-                this.meshes.torsoPants.material = this.materials.pants;
-                this.meshes.leftEyeball.material = this.meshes.rightEyeball.material = this.materials.eye;
-                this.meshes.leftPupil.material = this.meshes.rightPupil.material = this.materials.pupil;
-                this.meshes.leftEyebrow.material = this.meshes.rightEyebrow.material = this.materials.eyebrow;
-            }
-            /**
-             * 根据主题结构（一体式或三段式），更新身体部件的可见性。
-             */
-            _updateVisibility() {
-                const theme = THEMES[this.currentThemeName];
-                const isTriPart = theme.structure === 'tri-part';
-                this.meshes.torsoShirt.visible = isTriPart;
-                this.meshes.torsoPants.visible = isTriPart;
-            }
-            /**
-             * 根据主题结构和比例，更新躯干各部分的尺寸和位置。
-             */
-            _updateTorsoAppearance(width, x) {
-                const theme = THEMES[this.currentThemeName];
-                if (theme.structure === 'tri-part') {
-                    const shirtHeight = TORSO_HEIGHT * theme.proportions.shirt;
-                    const pantsHeight = TORSO_HEIGHT * theme.proportions.pants;
-                    const topHeight = TORSO_HEIGHT - shirtHeight - pantsHeight;
-                    this.meshes.torsoTop.scale.set(width, topHeight, x);
-                    this.meshes.torsoTop.position.y = (shirtHeight + pantsHeight) / 2;
-                    this.meshes.torsoShirt.scale.set(width, shirtHeight, x);
-                    this.meshes.torsoShirt.position.y = (pantsHeight - topHeight) / 2;
-                    this.meshes.torsoPants.scale.set(width, pantsHeight, x);
-                    this.meshes.torsoPants.position.y = (-topHeight - shirtHeight) / 2;
-                } else {
-                    this.meshes.torsoTop.scale.set(width, TORSO_HEIGHT, x);
-                    this.meshes.torsoTop.position.y = 0;
-                    this.meshes.torsoShirt.scale.set(0, 0, 0);
-                    this.meshes.torsoPants.scale.set(0, 0, 0);
-                }
-            }
+					const theme = THEMES[this.currentThemeName];
+					this.meshes.leftEyebrow.rotation.z = theme.eyebrow.angle || 0;
+					this.meshes.rightEyebrow.rotation.z = -(theme.eyebrow.angle || 0);
+				}
 
-            // --- 渲染与事件 ---
-            /**
-             * 渲染循环，持续更新控制器并渲染场景。
-             */
-            _animate() {
-                requestAnimationFrame(() => this._animate());
-                this.controls.update();
-                this.renderer.render(this.scene, this.camera);
-            }
-            /**
-             * 窗口大小改变时的响应函数。
-             */
-            _onWindowResize() {
-                this.camera.aspect = window.innerWidth / window.innerHeight;
-                this.camera.updateProjectionMatrix();
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
-            }
-        }
+				/**
+				 * 根据计算结果更新页面上所有的调试信息文本。
+				 * @param {Object} params - 从GEOMETRY_ENGINE计算出的参数。
+				 */
+				_updateUIDisplay(params) {
+					DOM.underbustValue.textContent = this.appState.underbust.toFixed(0);
+					DOM.bustCircValue.textContent = this.appState.targetBust.toFixed(2);
+					DOM.modeValue.textContent = params.mode;
+					DOM.xValue.textContent = (this.appState.underbust / 6.0).toFixed(2);
+					DOM.yValue.textContent = params.y.toFixed(2);
+					DOM.r_AValue.textContent = params.r_A.toFixed(2);
+					DOM.shapeValue.textContent = this.appState.foundShape.toFixed(2);
+				}
 
-        // 启动应用
-        const app = new ThreeApp();
-    </script>
-</body>
+				// --- 主题与外观管理 ---
+				/**
+				 * 根据主题定义，创建所有需要的材质实例。
+				 * @param {Object} theme - 当前的主题对象。
+				 */
+				_setupMaterials(theme) {
+					for (const key of ['body', 'shirt', 'pants', 'eye', 'pupil', 'eyebrow']) {
+						if (theme[key]) {
+							const { angle, ...materialProps } = { ...theme[key] };
+							const MaterialClass = THREE.MeshStandardMaterial;
+
+							if (key === 'pupil') {
+								materialProps.side = THREE.DoubleSide;
+								materialProps.depthTest = false;
+							}
+							this.materials[key] = new MaterialClass(materialProps);
+						}
+					}
+				}
+				/**
+				 * 根据主题类型，设置场景的灯光。
+				 * @param {Object} theme - 当前的主题对象。
+				 */
+				_setupLighting(theme) {
+					this.scene.children
+						.filter((obj) => obj.isLight)
+						.forEach((light) => this.scene.remove(light));
+					if (theme.type === 'toon') {
+						const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2.5);
+						light.position.set(0, 100, 0);
+						this.scene.add(light);
+					} else {
+						const ambient = new THREE.AmbientLight(0x404040, 2);
+						const light = new THREE.DirectionalLight(0xffffff, 2);
+						light.position.set(10, 30, 50);
+						this.scene.add(ambient, light);
+					}
+				}
+				/**
+				 * 将当前材质应用到所有对应的网格上。
+				 */
+				_applyMaterials() {
+					this.meshes.torsoTop.material = this.materials.body;
+					this.meshes.torsoShirt.material = this.materials.shirt;
+					this.meshes.torsoPants.material = this.materials.pants;
+					this.meshes.leftEyeball.material = this.meshes.rightEyeball.material = this.materials.eye;
+					this.meshes.leftPupil.material = this.meshes.rightPupil.material = this.materials.pupil;
+					this.meshes.leftEyebrow.material = this.meshes.rightEyebrow.material =
+						this.materials.eyebrow;
+				}
+				/**
+				 * 根据主题结构（一体式或三段式），更新身体部件的可见性。
+				 */
+				_updateVisibility() {
+					const theme = THEMES[this.currentThemeName];
+					const isTriPart = theme.structure === 'tri-part';
+					this.meshes.torsoShirt.visible = isTriPart;
+					this.meshes.torsoPants.visible = isTriPart;
+				}
+				/**
+				 * 根据主题结构和比例，更新躯干各部分的尺寸和位置。
+				 */
+				_updateTorsoAppearance(width, x) {
+					const theme = THEMES[this.currentThemeName];
+					if (theme.structure === 'tri-part') {
+						const shirtHeight = TORSO_HEIGHT * theme.proportions.shirt;
+						const pantsHeight = TORSO_HEIGHT * theme.proportions.pants;
+						const topHeight = TORSO_HEIGHT - shirtHeight - pantsHeight;
+						this.meshes.torsoTop.scale.set(width, topHeight, x);
+						this.meshes.torsoTop.position.y = (shirtHeight + pantsHeight) / 2;
+						this.meshes.torsoShirt.scale.set(width, shirtHeight, x);
+						this.meshes.torsoShirt.position.y = (pantsHeight - topHeight) / 2;
+						this.meshes.torsoPants.scale.set(width, pantsHeight, x);
+						this.meshes.torsoPants.position.y = (-topHeight - shirtHeight) / 2;
+					} else {
+						this.meshes.torsoTop.scale.set(width, TORSO_HEIGHT, x);
+						this.meshes.torsoTop.position.y = 0;
+						this.meshes.torsoShirt.scale.set(0, 0, 0);
+						this.meshes.torsoPants.scale.set(0, 0, 0);
+					}
+				}
+
+				// --- 渲染与事件 ---
+				/**
+				 * 渲染循环，持续更新控制器并渲染场景。
+				 */
+				_animate() {
+					requestAnimationFrame(() => this._animate());
+					this.controls.update();
+					this.renderer.render(this.scene, this.camera);
+				}
+				/**
+				 * 窗口大小改变时的响应函数。
+				 */
+				_onWindowResize() {
+					this.camera.aspect = window.innerWidth / window.innerHeight;
+					this.camera.updateProjectionMatrix();
+					this.renderer.setSize(window.innerWidth, window.innerHeight);
+				}
+			}
+
+			// 启动应用
+			const app = new ThreeApp();
+		</script>
+	</body>
 </html>

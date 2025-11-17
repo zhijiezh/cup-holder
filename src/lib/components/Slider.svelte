@@ -27,18 +27,12 @@
 </script>
 
 <div class="slider-container">
-	<label class="slider-label">
-		{label}: <span class="slider-value">{value.toFixed(unit === 'cm' ? 0 : 2)}{unit}</span>
+	<label class="slider-label form-label">
+		<span class="slider-heading">
+			{label}: <span class="slider-value">{value.toFixed(unit === 'cm' ? 0 : 2)}{unit}</span>
+		</span>
+		<input type="range" class="slider" {min} {max} {step} {value} oninput={handleInput} />
 	</label>
-	<input
-		type="range"
-		class="slider"
-		min={min}
-		max={max}
-		step={step}
-		value={value}
-		on:input={handleInput}
-	/>
 </div>
 
 <style>
@@ -54,8 +48,15 @@
 		color: rgba(255, 255, 255, 0.8);
 		font-weight: 500;
 		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.slider-heading {
+		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		gap: 1rem;
 	}
 
 	.slider-value {
@@ -123,4 +124,3 @@
 		}
 	}
 </style>
-

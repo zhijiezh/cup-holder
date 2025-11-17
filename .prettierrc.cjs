@@ -1,0 +1,17 @@
+export default {
+	useTabs: true,
+	tabWidth: 2,
+	printWidth: 100,
+	singleQuote: true,
+	semi: true,
+	trailingComma: 'none',
+	plugins: ['prettier-plugin-svelte', 'prettier-plugin-tailwindcss'],
+	overrides: [
+		{
+			files: '*.svelte',
+			options: {
+				parser: 'svelte'
+			}
+		}
+	]
+};

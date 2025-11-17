@@ -1,48 +1,70 @@
-# sv
+# Cup Holder
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Mobile-first bra size calculator built with **SvelteKit** + **Three.js**. It converts between international sizing systems, keeps brand-specific algorithms in configuration, and renders an animated 3D model that matches the selected measurements and theme.
 
-## Creating a project
+---
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Quick Start
 
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
+```bash
+npm install
+npm run dev        # start local dev server
+npm run check      # type-check + svelte-check
+npm run format     # run Prettier (tabs, 100-col width)
+npm run lint       # prettier --check + eslint
+npm run build      # production build
+npm run preview    # preview prod build
 ```
 
-## Developing
+---
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Project Layout
 
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+```
+src/
+  lib/
+    components/        # UI + Three.js widgets
+    logic/             # measurement types, region configs, converters
+    stores/            # Svelte stores (settings persistence)
+    styles/            # base/layout/forms/component CSS layers
+    theme/             # theme tokens + helpers shared by UI & model
+    config/            # global constants / option lists
+  routes/+page.svelte  # main experience orchestrating all pieces
 ```
 
-## Building
+Key files:
 
-To create a production version of your app:
+- `src/lib/logic/regionConfigs.ts`: declarative per-region sizing strategies.
+- `src/lib/stores/settingsStore.ts`: single source of truth for theme/language/unit/region (persists to `localStorage`).
+- `src/lib/components/ModelViewer.svelte`: Three.js scene with theme-aware palette.
+- `src/lib/styles/{base,layout,components,forms}.css`: layered CSS system (tokens → layout grid → shared components).
 
-```sh
-npm run build
-```
+---
 
-You can preview the production build with `npm run preview`.
+## Features
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+- 📐 **Region-aware conversions** (CN / US / US Classic / JP / UK) with modern + legacy band strategies.
+- 🧮 **Wave-select controls** for band/cup + precise number pickers for bust/underbust.
+- 🪄 **Themeable UI & 3D model** (Spongebob, Barbie, Toon, Cyberpunk, Alien…) with automatic text contrast.
+- 🌐 **i18n** (EN/中文) backed by `src/lib/i18n/index.ts`.
+- 📱 **Mobile-first layout**: content stack plus floating model canvas, safe-area aware.
+- 🧊 **State persistence**: unit/language/theme/region remembered per device.
 
-我在做一个项目，他的核心逻辑都在main.html上面
-我想做一个手机端可用的网页，或者说针对手机的网页可以轻松的帮助女性计算内衣尺码。有如下功能
-- 支持中文和英文
-- 手机友好，所有的都是波轮，比如32D到34C就是32转动到34，D转到C
-- 支持不同地区的不同尺码的转换，有一个波轮可以用于切换国家（日本美国中国）
-- 然后可以输入上胸围和下胸围来计算出罩杯，选择罩杯的时候也会显示上胸围和下胸围中位数
-- 我的3d模型有两个滑块，会根据上面的选项变化
-- 手机布局大致上是最上面是类似 Your cup is 然后换行居中很大的两个可以波动的数字比如32C，然后左下一点则是可以滑动的上胸围和下胸围。右下角则是这个可以变动的3d模型
-- 我希望这个页面要好看！要有艺术感，我的3d模型也有很多主题，希望可以契合。
+---
+
+## Development Notes
+
+- **Styling**: No Tailwind runtime. Instead we use CSS variables and `layout/components/forms` layers so spacing + typography remain consistent. Safe-area + spacing tokens defined in `base.css`.
+- **Three.js themes**: `ModelViewer` uses typed `ModelTheme` objects. All material configs live in one place and the UI store drives theme syncing.
+- **Linting/formatting**: ESLint with Svelte + TypeScript plugins and Prettier (tabs, single quotes, trailing comma disabled). Run `npm run lint` before committing.
+- **Region logic testing**: all converters live in `src/lib/logic`; each helper (measurements, strategies) is small and easy to unit test with Vitest if we add tests later.
+
+---
+
+## Future Ideas
+
+- Add automated tests for conversion strategies (`src/lib/logic/strategies`).
+- Expand docs (e.g., `docs/architecture.md`, `docs/sizing-reference.md`) if we onboard more contributors.
+- Optional Tailwind adoption for layout utilities (current system is ready if we choose to migrate).
+
+Questions or ideas? Open an issue or start a PR—this codebase is now structured for easy collaboration. 💪
