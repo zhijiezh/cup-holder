@@ -224,7 +224,7 @@ export const REGION_CONFIGS: Record<Region, RegionConfig> = {
 		cupNames: JP_CUP_NAMES,
 		...jpCupStrategy,
 		useBandForDifference: false,
-		brand: 'WACOAL'
+		brand: '华歌尔'
 	},
 	UK: {
 		...modernInchBand,

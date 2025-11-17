@@ -105,17 +105,17 @@
 	// 动态生成 cup 选项（根据当前地区）
 	$: cupOptions = getCupOptions(region);
 
-	// 创建品牌映射
-	const regionBrandMap: Record<string, string> = REGION_OPTIONS.reduce(
-		(map, regionOption) => {
-			const brand = getRegionBrand(regionOption as Region);
-			if (brand) {
-				map[regionOption] = brand;
-			}
-			return map;
-		},
-		{} as Record<string, string>
-	);
+	// 创建品牌映射（根据当前语言）
+	$: regionBrandMap = (() => {
+		const map: Record<string, string> = {};
+		for (const regionOption of REGION_OPTIONS) {
+			const baseBrand = getRegionBrand(regionOption as Region);
+			if (!baseBrand) continue;
+			const localized = t.brandTags?.[regionOption as Region] ?? baseBrand;
+			map[regionOption] = localized;
+		}
+		return map;
+	})();
 
 	/**
 	 * 单位转换函数

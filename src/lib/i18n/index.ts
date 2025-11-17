@@ -30,6 +30,13 @@ export const translations = {
 			cyberpunk: '赛博朋克',
 			alien: '外星人'
 		},
+		brandTags: {
+			CN: 'Naitangpai',
+			US: '维密',
+			US_CLASSIC: 'Skims',
+			JP: '华歌尔',
+			UK: 'Curvy Kate'
+		},
 		units: {
 			cm: '厘米',
 			inch: '英寸'
@@ -62,6 +69,13 @@ export const translations = {
 			toon: 'Toon',
 			cyberpunk: 'Cyberpunk',
 			alien: 'Alien'
+		},
+		brandTags: {
+			CN: 'Naitangpai',
+			US: 'Victoria Secret',
+			US_CLASSIC: 'Skims',
+			JP: 'Wacoal',
+			UK: 'Curvy Kate'
 		},
 		units: {
 			cm: 'cm',
