@@ -27,7 +27,7 @@
 	<label for="themeSelector">主题风格:</label>
 	<select id="themeSelector" on:change={themeChange} style="width: 100%; padding: 5px; margin-bottom: 15px;">
 		<option value="spongebob">Spongebob</option>
-		<option value="classic">Classic</option>
+		<option value="barbie">Barbie</option>
 		<option value="toon">Toon</option>
 		<option value="cyberpunk">Cyberpunk</option>
 		<option value="alien">Alien</option>

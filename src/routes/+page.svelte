@@ -66,6 +66,18 @@
 
 	// 主题颜色（根据当前主题动态计算）
 	$: themeColors = getThemeColors(currentTheme);
+	
+	// 确保主题变化时，模型和背景同步更新
+	$: {
+		if (modelViewer && typeof modelViewer.setTheme === 'function') {
+			// 使用 setTimeout 确保在下一个事件循环中执行，避免在初始化时冲突
+			setTimeout(() => {
+				if (modelViewer && typeof modelViewer.setTheme === 'function') {
+					modelViewer.setTheme(currentTheme);
+				}
+			}, 0);
+		}
+	}
 
 	// ============================================================================
 	// 工具函数
@@ -267,6 +279,10 @@
 		// 延迟执行，确保modelViewer已经挂载
 		setTimeout(() => {
 			calculateFromMeasurements();
+			// 确保初始化时主题同步
+			if (modelViewer && typeof modelViewer.setTheme === 'function') {
+				modelViewer.setTheme(currentTheme);
+			}
 		}, MODEL_UPDATE_DELAY);
 	});
 </script>

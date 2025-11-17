@@ -24,15 +24,17 @@
       pupil: { color: 0x000000, roughness: 0.0 },
       eyebrow: { color: 0x000000, roughness: 0.8, angle: 0 },
     },
-    classic: {
-      background: 0x2a2a2a, // 深灰色
+    barbie: {
+      background: 0xffc0cb, // 芭比粉色背景
       type: 'standard',
-      structure: 'uni-body', // 一体式结构
-      proportions: { shirt: 0, pants: 0 },
-      body: { color: 0x008cff, roughness: 0.5, metalness: 0.1 }, // 蓝色身体
-      eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 }, // 改为白色眼球
-      pupil: { color: 0x000000, roughness: 0.1 }, // 改为黑色瞳仁
-      eyebrow: { color: 0xcccccc, roughness: 0.8, angle: -0.15 },
+      structure: 'tri-part', // 三段式结构，可以分段穿衣服
+      proportions: { shirt: 0.2, pants: 0.3 },
+      body: { color: 0xffdab9, roughness: 0.8, metalness: 0.0 }, // 更白的肤色
+      shirt: { color: 0xff69b4, roughness: 0.9, metalness: 0.0 }, // 芭比粉上衣
+      pants: { color: 0xff1493, roughness: 0.9, metalness: 0.0 }, // 深粉色裤子
+      eye: { color: 0xffffff, roughness: 0.2, metalness: 0.0 }, // 白色眼球
+      pupil: { color: 0x000000, roughness: 0.0 }, // 黑色瞳仁
+      eyebrow: { color: 0x8b008b, roughness: 0.8, angle: 0.1 }, // 深紫色眉毛
     },
     toon: {
       background: 0xbde8ff, // 柔和天蓝
@@ -72,7 +74,7 @@
 
   let meshes: { [key: string]: THREE.Mesh | THREE.Group } = {};
   let materials: { [key: string]: THREE.Material } = {};
-  let currentThemeName = 'cyberpunk';
+  let currentThemeName = 'toon';
   let isMounted = false;
   let modelGroup: THREE.Group;
   // appState 作为内部状态，可以通过组件实例访问

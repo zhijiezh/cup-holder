@@ -21,7 +21,7 @@ export const DEFAULT_SIZES = {
 // export const CUP_OPTIONS: string[] = ['AA', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 
 // 主题选项
-export const THEME_OPTIONS: string[] = ['spongebob', 'classic', 'toon', 'cyberpunk', 'alien'];
+export const THEME_OPTIONS: string[] = ['spongebob', 'barbie', 'toon', 'cyberpunk', 'alien'];
 
 // 地区选项
 export const REGION_OPTIONS: string[] = ['CN', 'US', 'US_CLASSIC', 'JP', 'UK'];
@@ -34,7 +34,7 @@ export const UNIT_OPTIONS: string[] = ['cm', 'inch'];
 
 // 默认设置
 export const DEFAULT_SETTINGS = {
-	THEME: 'cyberpunk' as const,
+	THEME: 'toon' as const,
 	REGION: 'CN' as const,
 	LANGUAGE: 'zh' as const,
 	UNIT: 'cm' as const

@@ -25,7 +25,7 @@ export const translations = {
 		},
 		themes: {
 			spongebob: '海绵宝宝',
-			classic: '经典',
+			barbie: '芭比',
 			toon: '卡通',
 			cyberpunk: '赛博朋克',
 			alien: '外星人'
@@ -58,7 +58,7 @@ export const translations = {
 		},
 		themes: {
 			spongebob: 'Spongebob',
-			classic: 'Classic',
+			barbie: 'Barbie',
 			toon: 'Toon',
 			cyberpunk: 'Cyberpunk',
 			alien: 'Alien'

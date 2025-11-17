@@ -4,7 +4,7 @@
 
 export const THEME_BACKGROUNDS: Record<string, number | string> = {
 	spongebob: 0x87ceeb, // 天蓝色
-	classic: 0x2a2a2a, // 深灰色
+	barbie: 0xffc0cb, // 芭比粉色
 	toon: 0xbde8ff, // 柔和天蓝
 	cyberpunk: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', // 紫色渐变
 	alien: 0x05020d // 深空紫
@@ -89,7 +89,7 @@ export function getThemeColors(themeName: string): {
 		textColor: isDark ? '#ffffff' : '#1a1a1a',
 		textShadow: isDark 
 			? '0 4px 20px rgba(0, 0, 0, 0.3)' 
-			: '0 2px 10px rgba(0, 0, 0, 0.2)',
+			: 'none',
 		textColorSecondary: isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(26, 26, 26, 0.7)',
 		textColorTertiary: isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(26, 26, 26, 0.5)'
 	};
