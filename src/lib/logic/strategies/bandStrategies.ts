@@ -53,9 +53,13 @@ export function createClassicInchBandStrategy({
 		bandStart,
 		bandToMeasurement: (band: number) => inch(band),
 		measurementToBand: (underbust: Measurement) => {
-			const underbustInch = Math.round(underbust.toInch());
-			const addInches = underbustInch % 2 === 0 ? 4 : 5;
-			return underbustInch + addInches;
+			const underbustInch = underbust.toInch();
+			// Use floor instead of round to avoid discontinuities
+			// This ensures that 67cm (26.38") and 68cm (26.77") both map to the same band
+			// when they're close to the rounding boundary
+			const flooredUnderbust = Math.floor(underbustInch);
+			const addInches = flooredUnderbust % 2 === 0 ? 4 : 5;
+			return flooredUnderbust + addInches;
 		}
 	};
 }

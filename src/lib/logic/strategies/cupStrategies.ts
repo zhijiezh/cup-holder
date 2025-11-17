@@ -30,10 +30,16 @@ export function createLinearCupStrategy(options: LinearCupStrategyOptions): CupS
 	return {
 		measurementToCupName: (difference: Measurement, cupNames: string[]) => {
 			const diffValue = toUnitValue(difference, useInches);
-			if (diffValue < thresholdValue) {
+			// Round to avoid floating point precision issues before comparison
+			const roundedDiff = Math.round(diffValue * 100) / 100;
+			const roundedThreshold = Math.round(thresholdValue * 100) / 100;
+
+			if (roundedDiff < roundedThreshold) {
 				return options.belowFirstCupName;
 			}
-			const index = Math.floor((diffValue - thresholdValue) / stepValue) + 1;
+			// Calculate index: each stepValue increment corresponds to one cup size
+			// difference = 1 inch -> index 1 (A), 2 inch -> index 2 (B), etc.
+			const index = Math.floor((roundedDiff - roundedThreshold) / stepValue) + 1;
 			return generateCupName(index, cupNames);
 		},
 		cupNameToMeasurement: (cup: string, cupNames: string[]) => {
