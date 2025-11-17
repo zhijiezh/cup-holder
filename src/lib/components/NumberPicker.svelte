@@ -11,7 +11,8 @@
 		max = 100,
 		step = 1,
 		label = '',
-		unit = ''
+		unit = '',
+		unitDisplay = ''
 	}: {
 		id?: string;
 		value?: number;
@@ -20,6 +21,7 @@
 		step?: number;
 		label?: string;
 		unit?: string;
+		unitDisplay?: string;
 	} = $props();
 
 	const dispatch = createEventDispatcher();
@@ -196,7 +198,7 @@
 			<div class="prev-value">{getPrevValue() !== null ? formatValue(getPrevValue()!) : ''}</div>
 			<div class="current-value">
 				{formatValue(value)}
-				{unit}
+				{unitDisplay || unit}
 			</div>
 			<div class="next-value">{getNextValue() !== null ? formatValue(getNextValue()!) : ''}</div>
 		</div>

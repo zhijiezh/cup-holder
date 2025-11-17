@@ -347,6 +347,7 @@
 					step={1}
 					label={t.bust}
 					{unit}
+					unitDisplay={t.units[unit]}
 					on:change={handleBustChange}
 				/>
 			</div>
@@ -358,6 +359,7 @@
 					step={1}
 					label={t.underbust}
 					{unit}
+					unitDisplay={t.units[unit]}
 					on:change={handleUnderbustChange}
 				/>
 			</div>

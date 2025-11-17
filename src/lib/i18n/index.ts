@@ -31,7 +31,7 @@ export const translations = {
 			alien: '外星人'
 		},
 		brandTags: {
-			CN: 'Naitangpai',
+			CN: '奶糖派',
 			US: '维密',
 			US_CLASSIC: 'Skims',
 			JP: '华歌尔',
