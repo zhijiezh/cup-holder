@@ -338,7 +338,7 @@
 					value={bustDisplay}
 					min={bustMinDisplay}
 					max={bustMaxDisplay}
-					step={unit === 'inch' ? 1 : 0.5}
+					step={1}
 					label={t.bust}
 					{unit}
 					dragHint=""
@@ -350,7 +350,7 @@
 					value={underbustDisplay}
 					min={underbustMinDisplay}
 					max={underbustMaxDisplay}
-					step={unit === 'inch' ? 1 : 1}
+					step={1}
 					label={t.underbust}
 					{unit}
 					dragHint=""
