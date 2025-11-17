@@ -61,9 +61,10 @@
 
 	.picker-label {
 		font-size: 0.75rem;
-		color: rgba(255, 255, 255, 0.7);
+		color: var(--text-color-secondary, rgba(255, 255, 255, 0.7));
 		font-weight: 500;
 		margin-bottom: 0;
+		transition: color 0.3s ease;
 	}
 
 	.picker-wrapper {
@@ -82,19 +83,19 @@
 		padding: 0;
 		font-size: 1rem;
 		font-weight: 600;
-		color: white;
+		color: var(--text-color, white);
 		text-align: left;
 		cursor: pointer;
-		transition: all 0.3s ease;
+		transition: all 0.3s ease, color 0.3s ease;
 		min-width: auto;
-		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+		text-shadow: var(--text-shadow, 0 2px 10px rgba(0, 0, 0, 0.2));
 		line-height: 1.4;
 	}
 
 	.picker.large {
 		font-size: 128px;
 		font-weight: 700;
-		text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+		text-shadow: var(--text-shadow, 0 4px 20px rgba(0, 0, 0, 0.3));
 		line-height: 1.1;
 		letter-spacing: -0.02em;
 		white-space: nowrap;
@@ -113,7 +114,7 @@
 
 	.brand-tag {
 		font-size: 0.65rem;
-		color: rgba(255, 255, 255, 0.5);
+		color: var(--text-color-tertiary, rgba(255, 255, 255, 0.5));
 		background: rgba(255, 255, 255, 0.1);
 		padding: 0.15rem 0.4rem;
 		border-radius: 0.25rem;
@@ -124,6 +125,7 @@
 		margin-top: 0.25rem;
 		align-self: flex-start;
 		display: inline-block;
+		transition: color 0.3s ease;
 	}
 
 	.picker-wrapper:has(.picker.large) ~ .brand-tag {

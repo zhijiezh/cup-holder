@@ -24,6 +24,7 @@
 		MODEL_UPDATE_DELAY,
 		THEME_CHANGE_DELAY
 	} from '$lib/constants';
+	import { getThemeColors } from '$lib/themeConfig';
 
 	// ============================================================================
 	// 状态管理
@@ -62,6 +63,9 @@
 
 	// 国际化翻译
 	$: t = getTranslation(language);
+
+	// 主题颜色（根据当前主题动态计算）
+	$: themeColors = getThemeColors(currentTheme);
 
 	// ============================================================================
 	// 工具函数
@@ -267,8 +271,8 @@
 	});
 </script>
 
-<div class="background-layer"></div>
-<div class="app-container">
+<div class="background-layer" style="background: {themeColors.background}"></div>
+<div class="app-container" style="--text-color: {themeColors.textColor}; --text-shadow: {themeColors.textShadow}; --text-color-secondary: {themeColors.textColorSecondary}; --text-color-tertiary: {themeColors.textColorTertiary}">
 	<!-- 顶部标题 -->
 	<div class="header">
 		<h1 class="title">{t.title}</h1>
@@ -362,14 +366,22 @@
 </div>
 
 <style>
+	/* CSS 变量定义（默认值，会被内联样式覆盖） */
+	.app-container {
+		--text-color: #ffffff;
+		--text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+		--text-color-secondary: rgba(255, 255, 255, 0.7);
+		--text-color-tertiary: rgba(255, 255, 255, 0.5);
+	}
+
 	.background-layer {
 		position: fixed;
 		top: 0;
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 		z-index: -1;
+		transition: background 0.3s ease;
 	}
 
 	.background-layer::before {
@@ -422,14 +434,15 @@
 	.title {
 		font-size: clamp(48px, 8vw, 128px);
 		font-weight: 700;
-		color: white;
+		color: var(--text-color);
 		margin: 0;
 		line-height: 1.1;
-		text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+		text-shadow: var(--text-shadow);
 		letter-spacing: -0.02em;
 		white-space: nowrap;
 		overflow: visible;
 		word-break: keep-all;
+		transition: color 0.3s ease, text-shadow 0.3s ease;
 	}
 
 	.size-display {

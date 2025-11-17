@@ -72,7 +72,7 @@
 
   let meshes: { [key: string]: THREE.Mesh | THREE.Group } = {};
   let materials: { [key: string]: THREE.Material } = {};
-  let currentThemeName = 'spongebob';
+  let currentThemeName = 'cyberpunk';
   let isMounted = false;
   let modelGroup: THREE.Group;
   // appState 作为内部状态，可以通过组件实例访问

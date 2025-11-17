@@ -227,11 +227,12 @@
 
 	.number-picker-label {
 		font-size: 0.875rem;
-		color: rgba(255, 255, 255, 0.9);
+		color: var(--text-color-secondary, rgba(255, 255, 255, 0.9));
 		font-weight: 500;
 		margin-bottom: 0;
 		min-width: 80px;
 		text-align: left;
+		transition: color 0.3s ease;
 	}
 
 	.number-picker {
@@ -267,25 +268,27 @@
 	.next-value {
 		font-size: 1.25rem;
 		font-weight: 400;
-		color: rgba(255, 255, 255, 0.3);
+		color: var(--text-color-tertiary, rgba(255, 255, 255, 0.3));
 		line-height: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		min-width: 40px;
+		transition: color 0.3s ease;
 	}
 
 	.current-value {
 		font-size: 1.125rem;
 		font-weight: 600;
-		color: white;
+		color: var(--text-color, white);
 		line-height: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		min-width: 60px;
 		text-align: center;
-		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+		text-shadow: var(--text-shadow, 0 2px 10px rgba(0, 0, 0, 0.3));
+		transition: color 0.3s ease, text-shadow 0.3s ease;
 	}
 
 	/* 移动端优化 */

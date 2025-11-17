@@ -34,7 +34,7 @@ export const UNIT_OPTIONS: string[] = ['cm', 'inch'];
 
 // 默认设置
 export const DEFAULT_SETTINGS = {
-	THEME: 'spongebob' as const,
+	THEME: 'cyberpunk' as const,
 	REGION: 'CN' as const,
 	LANGUAGE: 'zh' as const,
 	UNIT: 'cm' as const
