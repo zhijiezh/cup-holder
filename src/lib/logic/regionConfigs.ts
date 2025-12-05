@@ -172,10 +172,10 @@ const cnCupStrategy = createLinearCupStrategy({
 });
 
 const jpCupStrategy = createLinearCupStrategy({
-	firstCupThreshold: cm(7.5),
+	firstCupThreshold: cm(10),
 	cupStep: cm(2.5),
 	belowFirstCupName: 'AA',
-	belowFirstCupValue: cm(5)
+	belowFirstCupValue: cm(7.5)
 });
 
 const inchCupStrategy = createLinearCupStrategy({
